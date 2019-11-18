@@ -4,3 +4,50 @@ author: "Christian Pascual"
 output: html_document
 ---
 
+```{r, message = F, warning = F }
+library(tidyverse)
+```
+
+
+# Doing The Simulations
+
+![](./img/process.png)
+
+```{r}
+simulate = function(trts, 
+                    order = c("A", "B", "B", "A"), 
+                    freq = 1, 
+                    n.blocks = 1) {
+  # Function for simulating data of an N-of-1 trial
+  
+  # Parameters
+  #   - trts: a list of objects representing each of the treatments to be taken
+  #   - order: the order that the treatments appear in
+  #   - freq: the sampling frequency, how many times a patient will be measured in a 
+  #           given treatment period
+  #   - n.block: how many treatment blocks there are
+  
+  # Build out a block skeleton detailing the treatment schedule for the subject
+  single.block = tibble(
+    treatment = rep(order, each = freq)
+  )
+  
+  # Append this data structure to itself repeatedly
+  all.blocks = NULL
+  for (i in 1:n.blocks) {
+    all.blocks = bind_rows(all.blocks, single.block)
+  }
+  
+  all.blocks = all.blocks %>% 
+    mutate(
+      block = rep(1:n.blocks, each = freq * length(order))
+    )
+  
+  return(all.blocks)
+  
+}
+a = simulate(freq = 3, n.blocks = 6)
+```
+
+
+
