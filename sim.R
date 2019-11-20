@@ -1,21 +1,3 @@
----
-title: "Simulation Framework"
-author: "Christian Pascual"
-output: html_document
----
-
-```{r, message = F, warning = F }
-library(tidyverse)
-library(knitr)
-```
-
-# Doing The Simulations
-
-![](./img/process.png)
-
-# Creating The "Schedule" Of Subject Observations 
-
-```{r}
 # Function for creating backbone for data of an N-of-1 trial
 create.backbone = function(order = c("A", "B"), s.freq = 1, 
                            p.length = 1, n.blocks = 1) {
@@ -50,47 +32,6 @@ create.backbone = function(order = c("A", "B"), s.freq = 1,
   return(all.blocks)
 }
 
-# Confirming this works
-# Sampling once a day, each treatment period is only one day, 3 blocks...
-bb = create.backbone(order = c("A", "B", "B", "A"), 
-                    s.freq = 1, p.length = 1, n.blocks = 3)
-kable(head(bb))
-```
-
-With a schedule of treatments and periods down, we can start to model the carryover and run-in effects. First, we need a proper representation of the different treatments.
-
-# Treatment Objects 
-
-There are three things that we need to know from a treatment:
-
-- its actual effect on the outcome of interest
-- the time needed for its effect to completely go away (carry over)
-- the time needed for it to reach its full effect (run-in)
-
-```{r}
-# Treatment that reduces outcome by 23 points, 2 days to ramp up, 3 days to die
-trt.A = list(
-  name = "A",
-  effect = -30,
-  run = 2,
-  carry = 3
-)
-
-trt.B = list(
-  name = "B",
-  effect = -50,
-  run = 4,
-  carry = 2
-)
-
-all.trts = list(trt.A, trt.B)
-```
-
-We'll need a way to correctly capture when a treatment has carryover/run-in and when to have instantaneous effects.
-
-# Modeling Treatment Effects 
-
-```{r, warning = F, message = F }
 expdecay = function(start, target, tau, delta_t) {
   # Parameters
   # - start: the value we want to start at
@@ -194,30 +135,6 @@ model.outcome = function(bb,
   return(bb)
 }
 
-bb = create.backbone(order = c("A", "B", "B", "A"), 
-                     s.freq = 1, p.length = 10, n.blocks = 5)
-test = model.outcome(bb, all.trts, 100, 2) %>% 
-  pivot_longer(
-    ., 
-    baseline:obs,
-    names_to = "effect",
-    values_to = "value"
-  )
-
-test %>% 
-  ggplot(aes(x = day, y = value, color = effect)) +
-  geom_line() +
-  labs(
-    title = "Visualization of simulated baseline, treatment effects, & observation",
-    x = "Day of treatment", 
-    y = "Outcome value"
-  ) + 
-  theme(legend.position = "bottom")
-```
-
-# Convenience
-
-```{r}
 # Putting the two functions together to make simulations easy
 simulate.trial = function(trts, mu.b = 100, sd.b = 5,
                           order = c("A", "B"), s.freq = 1, p.length = 1, n.blocks = 1,
@@ -233,7 +150,25 @@ simulate.trial = function(trts, mu.b = 100, sd.b = 5,
   
   return(full.data)
 }
-```
 
+# USE CASE:
 
-
+# bb = create.backbone(order = c("A", "B", "B", "A"), 
+#                      s.freq = 1, p.length = 10, n.blocks = 5)
+# test = model.outcome(bb, all.trts, 100, 2) %>% 
+#   pivot_longer(
+#     ., 
+#     baseline:obs,
+#     names_to = "effect",
+#     values_to = "value"
+#   )
+# 
+# test %>% 
+#   ggplot(aes(x = day, y = value, color = effect)) +
+#   geom_line() +
+#   labs(
+#     title = "Visualization of simulated baseline, treatment effects, & observation",
+#     x = "Day of treatment", 
+#     y = "Outcome value"
+#   ) + 
+#   theme(legend.position = "bottom")
