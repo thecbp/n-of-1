@@ -19,14 +19,15 @@ library(knitr)
 # Function for creating backbone for data of an N-of-1 trial
 create.backbone = function(order = c("A", "B"), s.freq = 1, 
                            p.length = 1, n.blocks = 1) {
-  # Assumes that we will only be working with two treatments 
-  
   # Parameters
-  #   - order: the order that the treatments appear in
-  #   - s.freq: sampling frequency, how many times a patient will be measured in a 
+  # - order: the order that the treatments appear in
+  # - s.freq: sampling frequency, how many times a patient will be measured in a 
   #           given treatment period
-  #   - p.length: period length
-  #   - n.blocks: how many treatment blocks there are
+  # - p.length: period length
+  # - n.blocks: how many treatment blocks there are
+  
+  # Working Assumptions
+  # - Assumes that we will only be working with two treatments 
   
   # Build out a block skeleton detailing the treatment schedule for the subject
   single.block = tibble(
@@ -56,7 +57,7 @@ bb = create.backbone(order = c("A", "B", "B", "A"),
 kable(head(bb))
 ```
 
-With a schedule of treatments and periods down, we can start to model the carryover and wash-in effects. First, we need a proper representation of the different treatments.
+With a schedule of treatments and periods down, we can start to model the carryover and run-in effects. First, we need a proper representation of the different treatments.
 
 # Treatment Objects 
 
@@ -64,49 +65,160 @@ There are three things that we need to know from a treatment:
 
 - its actual effect on the outcome of interest
 - the time needed for its effect to completely go away (carry over)
-- the time needed for it to reach its full effect (wash in)
+- the time needed for it to reach its full effect (run-in)
 
 ```{r}
-# Function that captures decay transitions between two values
-expdecay <- function(start, target, tau, delta_t) {
-  # Parameters
-  #   - start: the value we want to start at
-  #   - target: the value we want to end up at after all delta_t
-  #   - tau: scalar factor for how fast the decay happens (higher = faster)
-  #   - delta_t: vector of numbers to calculate the transition vector
-  
-  start + (target - start) * exp(-delta_t / tau)
-}
-
-# Treatment that reduces outcome by 20 points, 2 days to ramp up, 3 days to die
+# Treatment that reduces outcome by 23 points, 2 days to ramp up, 3 days to die
 trt.A = list(
-  effect = -20,
+  name = "A",
+  effect = -30,
   run = 2,
   carry = 3
 )
 
-# Treatment that is all placebo
 trt.B = list(
-  effect = 0,
-  run = 0,
-  carry = 0
+  name = "B",
+  effect = -50,
+  run = 4,
+  carry = 2
 )
+
+all.trts = list(trt.A, trt.B)
 ```
 
-```{r}
+We'll need a way to correctly capture when a treatment has carryover/run-in and when to have instantaneous effects.
 
-n = 10
-tibble(
-  x = 0:n,
-  w = exponential_decay(1, 3, seq(0:n), 1),
-  w1 = exponential_decay1(1, 3, seq(0:n), 2)
-) %>% 
-  ggplot(aes(x = x)) + 
-  geom_point(aes(y = w),col = "green") +
-  geom_point(aes(y = w1),col = "red") 
+# Modeling Treatment Effects 
+
+```{r, warning = F, message = F }
+expdecay = function(start, target, tau, delta_t) {
+  # Parameters
+  # - start: the value we want to start at
+  # - target: the value we want to end up at after all delta_t
+  # - tau: scalar factor for how fast the decay happens (higher = slower decay)
+  # - delta_t: vector of numbers to calculate the transition
+  
+  # Returns
+  # - a vector of values going from a start value to a target value in a decay fashion
+  
+  # Notes:
+  # if the decay profile doesn't seem correct, just tune it to your liking
+  
+  target + (start - target) * exp(-delta_t / tau)
+}
+
+model.outcome = function(bb, 
+                         trts,
+                         mu.b,
+                         sd.b,
+                         tau.vec = c(1, 1),
+                         trt.type = "-") {
+  # Parameters
+  # - bb: a treatment schedule backbone (create.backbone)
+  # - trts: list of treatments to get the effect for
+  # - mu.b: mean of the baseline value (what level should outcome take)
+  # - sd.b: standard deviation of the baseline
+  # - tau.vec: vector of tau values to tune the decay of each treatment
+  # - trt.type: indicates if the treatments add/subtract from outcome ("-" for reducing effect)
+  
+  # Working Assumptions:
+  # - just working with a continuous outcome for now
+  # - baseline will just have regular (normal) noise
+  # - assume that the carryover and run-in of any treatment always will be smaller than the 
+  #     treatment period
+  # - treatments will just be sequentially named as letters starting at A, B, ... 
+  
+  # To-do:
+  # - sum all effects to get an observed effect
+  # - add this observed effect into the 
+  # - start with continuous outcome first
+  
+  # Extra:
+  # - expand to other outcome types?
+  # - allow for interaction between treatments
+  
+  # Treatment names
+  trt.names = c("A", "B", "C", "D")
+  
+  # Add in a baseline value
+  bb = bb %>% 
+    mutate(
+      baseline = rnorm(nrow(bb), mu.b, sd.b)
+    )
+  
+  # Create simple treatment effect for all the given treatments
+  for (i in 1:length(trts)) {
+    bb = bb %>% 
+      mutate(
+        trt.e = ifelse(treatment == trt.names[i], trts[[i]]$effect, 0)
+      )  %>% 
+      rename(., name = trt.e) # Janky solution but whatever
+    
+    # Properly account for carryover and run-in
+    
+    # Create transition vectors for carryover & run-in based on current treatment
+    trt.run.in = expdecay(0, trts[[i]]$effect, tau.vec[i], seq(1:trts[[i]]$run))
+    trt.carryover = expdecay(trts[[i]]$effect, 0, tau.vec[i], seq(1:trts[[i]]$carry))
+    
+    # Detect where the patient actually switches treatment
+    # Take the differences of the current treatment effect
+    # We know that the patient switches treatment when there is a non-zero difference
+    eff.diff = diff(bb$name)
+    switch.idx = which(eff.diff != 0)
+    
+    # Use the indices and sign of the difference to correctly add in decay
+    for (idx in switch.idx) {
+      # Look at the difference and treatment type to infer carryover vs run-in
+      if (eff.diff[idx] < 0) {
+        if (trt.type == "-") { 
+          # Running in a reducing treatment
+          bb$name[(idx + 1):(idx + trts[[i]]$run)] = trt.run.in
+        } else {
+          # Carryover an additive treatment
+          bb$name[(idx + 1):(idx + trts[[i]]$carry)] = trt.carryover
+        }
+      } else {
+        if (trt.type == "-") { 
+          # Carryover a reducing treamtment
+          bb$name[(idx + 1):(idx + trts[[i]]$carry)] = trt.carryover
+        } else {
+          # Running in an additive treatment
+          bb$name[(idx + 1):(idx + trts[[i]]$run)] = trt.run.in
+        }
+      } 
+    }
+    
+    # Rename the treatment properly
+    colnames(bb)[length(colnames(bb))] = paste(trt.names[i], ".eff", sep = "")
+  }
+  
+  # Calculate the observed effect on the baseline 
+  bb = bb %>% 
+    mutate(
+      obs = baseline + A.eff + B.eff
+    )
+  
+  return(bb)
+}
+
+bb = create.backbone(order = c("A", "B", "B", "A"), 
+                     s.freq = 1, p.length = 10, n.blocks = 5)
+test = model.outcome(bb, all.trts, 100, 2) %>% 
+  pivot_longer(
+    ., 
+    baseline:obs,
+    names_to = "effect",
+    values_to = "value"
+  )
+
+test %>% 
+  ggplot(aes(x = day, y = value, color = effect)) +
+  geom_line() +
+  labs(
+    title = "Visualization of simulated baseline, treatment effects, & observation",
+    x = "Day of treatment", 
+    y = "Outcome value"
+  ) + 
+  theme(legend.position = "bottom")
 ```
-
-
-
-
 
