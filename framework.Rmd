@@ -109,8 +109,8 @@ expdecay = function(start, target, tau, delta_t) {
 
 model.outcome = function(bb, 
                          trts,
-                         mu.b,
-                         sd.b,
+                         mu.b = 100,
+                         sd.b = 5,
                          tau.vec = c(1, 1),
                          trt.type = "-") {
   # Parameters
@@ -127,27 +127,19 @@ model.outcome = function(bb,
   # - assume that the carryover and run-in of any treatment always will be smaller than the 
   #     treatment period
   # - treatments will just be sequentially named as letters starting at A, B, ... 
-  
-  # To-do:
-  # - sum all effects to get an observed effect
-  # - add this observed effect into the 
-  # - start with continuous outcome first
+  # - both treatments used will have the same effect direction (both reducing, etc)
   
   # Extra:
   # - expand to other outcome types?
-  # - allow for interaction between treatments
+  # - allow for interaction between treatments?
   
   # Treatment names
-  trt.names = c("A", "B", "C", "D")
+  trt.names = c("A", "B")
   
-  # Add in a baseline value
-  bb = bb %>% 
-    mutate(
-      baseline = rnorm(nrow(bb), mu.b, sd.b)
-    )
-  
-  # Create simple treatment effect for all the given treatments
+  # Create treatment effect profiles for all the given treatments
   for (i in 1:length(trts)) {
+    
+    # Start with simple on/off to place in effects
     bb = bb %>% 
       mutate(
         trt.e = ifelse(treatment == trt.names[i], trts[[i]]$effect, 0)
@@ -195,6 +187,7 @@ model.outcome = function(bb,
   # Calculate the observed effect on the baseline 
   bb = bb %>% 
     mutate(
+      baseline = rnorm(nrow(bb), mu.b, sd.b),
       obs = baseline + A.eff + B.eff
     )
   
@@ -220,5 +213,25 @@ test %>%
     y = "Outcome value"
   ) + 
   theme(legend.position = "bottom")
+```
+
+# Convenience
+
+```{r}
+# Putting the two functions together to make simulations easy
+simulate.trial = function(trts, mu.b = 100, sd.b = 5,
+                          order = c("A", "B"), s.freq = 1, p.length = 1, n.blocks = 1,
+                          tau.vec = c(1, 1), trt.type = "-") {
+  
+  # Create the backbone
+  bb = create.backbone(order, s.freq, p.length, n.blocks)
+  
+  # Model the treatment effects
+  full.data = model.outcome(bb, trts, 
+                            mu.b = 100, sd.b = 5,
+                            tau.vec = c(1, 1), trt.type = "-")
+  
+  return(full.data)
+}
 ```
 
