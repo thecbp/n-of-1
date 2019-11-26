@@ -36,7 +36,7 @@ expdecay = function(start, target, tau, delta_t) {
   # Parameters
   # - start: the value we want to start at
   # - target: the value we want to end up at after all delta_t
-  # - tau: scalar factor for how fast the decay happens (higher = slower decay)
+  # - tau: scalar factor for how fast the decay happens (related to carryover, run-in)
   # - delta_t: vector of numbers to calculate the transition
   
   # Returns
@@ -48,18 +48,54 @@ expdecay = function(start, target, tau, delta_t) {
   target + (start - target) * exp(-delta_t / tau)
 }
 
+collect.intervals = function(trt, trt.vec, type = "run") {
+  # Parameters
+  # - trt: the given treatment you want to find the treatment intervals for
+  # - trt.vec: the vector of treatments
+  # - match: do we want to see when the treatment is being used (TRUE) or not being used (FALSE)
+  
+  n = length(trt.vec)
+  all.indices = c()
+  matched = ifelse(type == "run", TRUE, FALSE)
+  indices = integer()
+  
+  for (i in 1:n) {
+    match = (trt.vec[i] == trt)
+    # The character matches the current index in the treatment vector
+    # Add the index
+    if (match == matched) {
+      indices = c(indices, i)
+    }
+    
+    # Edge case for capturing treatments at the end
+    if (match == matched & i == n) {
+      indices = c(indices, i)
+      all.indices = rbind(all.indices, c(min(indices), max(indices)))
+    }
+    
+    # if the character didn't match and we have a bunch of indices
+    # This signifies that there was a change in treatment
+    # We should reset everything in preparation for seeing the treatment again
+    if (match == !matched & length(indices) > 0) {
+      all.indices = rbind(all.indices, c(min(indices), max(indices)))
+      indices = integer()
+    }
+    
+  }
+  return(all.indices)
+}
+
 model.outcome = function(bb, 
                          trts,
                          mu.b = 100,
                          sd.b = 5,
-                         tau.vec = c(1, 1),
-                         trt.type = "-") {
+                         sd.o = 1) {
   # Parameters
   # - bb: a treatment schedule backbone (create.backbone)
   # - trts: list of treatments to get the effect for
   # - mu.b: mean of the baseline value (what level should outcome take)
   # - sd.b: standard deviation of the baseline
-  # - tau.vec: vector of tau values to tune the decay of each treatment
+  # - sd.o: standard deviation of observation noise
   # - trt.type: indicates if the treatments add/subtract from outcome ("-" for reducing effect)
   
   # Working Assumptions:
@@ -74,85 +110,100 @@ model.outcome = function(bb,
   # - expand to other outcome types?
   # - allow for interaction between treatments?
   
-  # Treatment names
-  trt.names = c("A", "B")
+  # Create columns for the effects of all potential treatments
+  effects = tibble(
+    idx = 1:nrow(bb),
+    A.eff = 0,
+    B.eff = 0,
+    C.eff = 0,
+    D.eff = 0
+  )
   
-  # Create treatment effect profiles for all the given treatments
-  for (i in 1:length(trts)) {
+  eff.names = c("A.eff", "B.eff", "C.eff", "D.eff")
+  
+  for (i in 1:length(all.trts$testing)) {
+    cur.trt = all.trts$testing[i]
+    run.idx = collect.intervals(cur.trt, bb$treatment, type = "run")
+    carry.idx = collect.intervals(cur.trt, bb$treatment, type = "carry")
     
-    # Start with simple on/off to place in effects
-    bb = bb %>% 
-      mutate(
-        trt.e = ifelse(treatment == trt.names[i], trts[[i]]$effect, 0)
-      )  %>% 
-      rename(., name = trt.e) # Janky solution but whatever
-    
-    # Properly account for carryover and run-in
-    
-    # Create transition vectors for carryover & run-in based on current treatment
-    trt.run.in = expdecay(0, trts[[i]]$effect, tau.vec[i], seq(1:trts[[i]]$run))
-    trt.carryover = expdecay(trts[[i]]$effect, 0, tau.vec[i], seq(1:trts[[i]]$carry))
-    
-    # Detect where the patient actually switches treatment
-    # Take the differences of the current treatment effect
-    # We know that the patient switches treatment when there is a non-zero difference
-    eff.diff = diff(bb$name)
-    switch.idx = which(eff.diff != 0)
-    
-    # Use the indices and sign of the difference to correctly add in decay
-    for (idx in switch.idx) {
-      # Look at the difference and treatment type to infer carryover vs run-in
-      if (eff.diff[idx] < 0) {
-        if (trt.type == "-") { 
-          # Running in a reducing treatment
-          bb$name[(idx + 1):(idx + trts[[i]]$run)] = trt.run.in
-        } else {
-          # Carryover an additive treatment
-          bb$name[(idx + 1):(idx + trts[[i]]$carry)] = trt.carryover
-        }
-      } else {
-        if (trt.type == "-") { 
-          # Carryover a reducing treamtment
-          bb$name[(idx + 1):(idx + trts[[i]]$carry)] = trt.carryover
-        } else {
-          # Running in an additive treatment
-          bb$name[(idx + 1):(idx + trts[[i]]$run)] = trt.run.in
-        }
-      } 
+    # Need to trim the carry for all the treatments that don't go first
+    first.trt = bb$treatment[1]
+    if (first.trt != cur.trt) {
+      carry.idx = carry.idx[-1,]
     }
     
-    # Rename the treatment properly
-    colnames(bb)[length(colnames(bb))] = paste(trt.names[i], ".eff", sep = "")
+    # fill in the treatment effects using the run-in
+    for (j in 1:nrow(run.idx)) {
+      start = run.idx[j,1]
+      end = run.idx[j,2]
+      distance = end - start + 1
+      effects[[eff.names[i]]][start:end] = expdecay(0, 
+                                                    all.trts[[cur.trt]]$effect, 
+                                                    all.trts[[cur.trt]]$run,
+                                                    1:distance) +
+        rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
+    }
+    
+    # carryover
+    for (j in 1:nrow(carry.idx)) {
+      start = carry.idx[j,1]
+      end = carry.idx[j,2]
+      distance = end - start + 1
+      effects[[eff.names[i]]][start:end] = expdecay(all.trts[[cur.trt]]$effect, 
+                                                    0, 
+                                                    all.trts[[cur.trt]]$carry, 
+                                                    1:distance) +
+        rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
+    }
+    
+    
   }
   
+  # Recombine the backbone with the effects
+  final.bb = bind_cols(bb, effects)
+  
   # Calculate the observed effect on the baseline 
-  bb = bb %>% 
+  final.bb = final.bb %>% 
     mutate(
       baseline = rnorm(nrow(bb), mu.b, sd.b),
-      obs = baseline + A.eff + B.eff
-    )
+      obs = baseline + A.eff + B.eff + C.eff + D.eff + rnorm(nrow(bb), 0, sd.o)
+    ) %>% 
+    select(-idx)
   
-  return(bb)
+  return(final.bb)
 }
 
 # Putting the two functions together to make simulations easy
-simulate.trial = function(trts, mu.b = 100, sd.b = 5,
-                          order = c("A", "B"), s.freq = 1, p.length = 1, n.blocks = 1,
-                          tau.vec = c(1, 1), trt.type = "-") {
+simulate.trial = function(trts, mu.b = 100, sd.b = 5, sd.o = 1,
+                          order = c("A", "B"), s.freq = 1, p.length = 1, n.blocks = 1) {
   
   # Create the backbone
   bb = create.backbone(order, s.freq, p.length, n.blocks)
   
   # Model the treatment effects
-  full.data = model.outcome(bb, trts, 
-                            mu.b = 100, sd.b = 5,
-                            tau.vec = c(1, 1), trt.type = "-")
+  full.data = model.outcome(bb, trts, mu.b = mu.b, sd.b = sd.b, sd.o = sd.o)
   
   return(full.data)
 }
 
 # USE CASE:
 
+# trt.A = list(
+#   name = "A",
+#   effect = -30,
+#   sd = 1,
+#   run = 2,
+#   carry = 3
+# )
+# 
+# trt.B = list(
+#   name = "B",
+#   effect = -50,
+#   sd = 1,
+#   run = 4,
+#   carry = 2
+# )
+#
 # bb = create.backbone(order = c("A", "B", "B", "A"), 
 #                      s.freq = 1, p.length = 10, n.blocks = 5)
 # test = model.outcome(bb, all.trts, 100, 2) %>% 
