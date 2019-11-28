@@ -86,10 +86,11 @@ collect.intervals = function(trt, trt.vec, type = "run") {
 }
 
 model.outcome = function(bb, 
-                         trts,
+                         all.trts,
                          mu.b = 100,
                          sd.b = 5,
-                         sd.o = 1) {
+                         sd.o = 1,
+                         baseline.type = "normal") {
   # Parameters
   # - bb: a treatment schedule backbone (create.backbone)
   # - trts: list of treatments to get the effect for
@@ -127,10 +128,7 @@ model.outcome = function(bb,
     carry.idx = collect.intervals(cur.trt, bb$treatment, type = "carry")
     
     # Need to trim the carry for all the treatments that don't go first
-    first.trt = bb$treatment[1]
-    if (first.trt != cur.trt) {
-      carry.idx = carry.idx[-1,]
-    }
+    
     
     # fill in the treatment effects using the run-in
     for (j in 1:nrow(run.idx)) {
@@ -145,27 +143,45 @@ model.outcome = function(bb,
     }
     
     # carryover
-    for (j in 1:nrow(carry.idx)) {
-      start = carry.idx[j,1]
-      end = carry.idx[j,2]
-      distance = end - start + 1
-      effects[[eff.names[i]]][start:end] = expdecay(all.trts[[cur.trt]]$effect, 
-                                                    0, 
-                                                    all.trts[[cur.trt]]$carry, 
-                                                    1:distance) +
-        rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
+    # Sometimes we will not have carryover for a treatment (like n.blocks = 1)
+    first.trt = bb$treatment[1]
+    if (first.trt != cur.trt & nrow(carry.idx) != 1) {
+      for (j in 1:nrow(carry.idx)) {
+        start = carry.idx[j,1]
+        end = carry.idx[j,2]
+        distance = end - start + 1
+        effects[[eff.names[i]]][start:end] = expdecay(all.trts[[cur.trt]]$effect, 
+                                                      0, 
+                                                      all.trts[[cur.trt]]$carry, 
+                                                      1:distance) +
+          rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
+      }
     }
-    
-    
   }
   
   # Recombine the backbone with the effects
   final.bb = bind_cols(bb, effects)
   
+  # Adding in functionality to turn baseline into a Markov process
+  if (baseline.type == "normal") {
+    baseline = rnorm(nrow(bb), mu.b, sd.b)
+  } else if (baseline.type == "markov") {
+    # Start the baseline at a given value
+    baseline = c(mu.b)
+    
+    cur = mu.b
+    # Start the random walk
+    while (length(baseline) < nrow(bb)) {
+      cur = mu.b + rnorm(1, 0, sd.b)
+      baseline = c(baseline, cur)
+    }
+  }
+  
+  
   # Calculate the observed effect on the baseline 
   final.bb = final.bb %>% 
     mutate(
-      baseline = rnorm(nrow(bb), mu.b, sd.b),
+      baseline = baseline,
       obs = baseline + A.eff + B.eff + C.eff + D.eff + rnorm(nrow(bb), 0, sd.o)
     ) %>% 
     select(-idx)
@@ -174,14 +190,27 @@ model.outcome = function(bb,
 }
 
 # Putting the two functions together to make simulations easy
-simulate.trial = function(trts, mu.b = 100, sd.b = 5, sd.o = 1,
-                          order = c("A", "B"), s.freq = 1, p.length = 1, n.blocks = 1) {
+simulate.trial = function(trts, 
+                          mu.b = 100, 
+                          sd.b = 5, 
+                          sd.o = 1,
+                          order = c("A", "B"), 
+                          s.freq = 1, 
+                          p.length = 1, 
+                          n.blocks = 1,
+                          baseline.type = "normal") {
   
   # Create the backbone
-  bb = create.backbone(order, s.freq, p.length, n.blocks)
+  bb = create.backbone(order = order, 
+                       s.freq = s.freq, 
+                       p.length = p.length, 
+                       n.blocks = n.blocks)
   
   # Model the treatment effects
-  full.data = model.outcome(bb, trts, mu.b = mu.b, sd.b = sd.b, sd.o = sd.o)
+  full.data = model.outcome(bb, trts, 
+                            mu.b = mu.b, 
+                            sd.b = sd.b, sd.o = sd.o,
+                            baseline.type = "normal")
   
   return(full.data)
 }

@@ -256,12 +256,12 @@ model.outcome = function(bb,
                                                     1:distance) +
         rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
     }
-    
-    
   }
   
   # Recombine the backbone with the effects
   final.bb = bind_cols(bb, effects)
+  
+  
   
   # Calculate the observed effect on the baseline 
   final.bb = final.bb %>% 
@@ -289,7 +289,7 @@ all.trts = list(
   )
 
 bb = create.backbone(order = c("A", "B"), s.freq = 1, p.length = 20, n.blocks = 3)
-test = model.outcome(bb, all.trts, 100, 2)
+test = model.outcome(bb, trts, 100, 2)
 
 test %>% 
   ggplot(aes(x = day, y = baseline)) +

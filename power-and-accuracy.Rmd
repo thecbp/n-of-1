@@ -9,21 +9,6 @@ library(lme4)
 source("sim.R")
 ```
 
-# Working Assumptions
-
-- Number of blocks fixed at 1
-- Baseline value will be set to $\mu_b = 100$
-- Baseline noise will be set to $\sigma_b^2 = 1$ and can vary too.
-- Treatment A will have the parameters:
-  - Will be the true treatment that works for the patient (more reduction is better)
-  - Effect size will be -10
-  - Run-in will be 5 days
-  - Carryover will be 2 days
-- Treatment B will have the parameters:
-  - Effect size will vary based on the simulation needs (varying from -10 and 0)
-  - Run-in will be 2 days
-  - Carryover will be 2 days
-
 # Key Questions
 
 - How do different differences in the treatments themselves and baseline affect sample size?
@@ -31,55 +16,133 @@ source("sim.R")
 
 # Key Visualizations
 
-- 
+- Number of samples vs Mean Power (subclassed by effect size)
+- Number of samples vs Average Deviation of Patient Effect (subclassed by effect size)
+- Process noise vs minimum sample size to reach power 0.80 (subclassed by effect size)
+- Baseline drift vs average deviation of patient effect (subclassed by number of blocks)
+- Run-in vs average deviation of patient effect (subclassed by effect difference)
+- Carryover vs average deviation of patient effect (subclassed by effect difference)
 
-# Number of Samples vs Effect Estimation
-  
+# Number of Samples vs Mean Power (& Average Deviation of Effect)
+
+## Fixed Parameters:
+
+- $\mu_b = 0$
+- $\sigma_b^2 = 5$
+- Effect of Treatment A: -10
+- Standard Deviation of Treament A: 1
+- Run-in of A: $\tau = 2$
+- Carryover of A: $\gamma = 2$
+- Treatment B is placebo, standard deviation of B is 1
+- Treatment order: A, B, B, A
+- Sampling frequency: 1/day
+- Period length: 20 days
+- Number of blocks: 2
+
 ```{r}
-# Choose an effect size
-# Choose a number of samples (assuming s.freq = 1, p.length will vary)
-# make a data set from the above parameters
-# run the mixed model on it
-# capture if the estimates for treatment A is significant
-# Repeat the above 100 times for each effect, number of samples
-# Capture power from the above simulations
-
-# Get a vector of candidate sample sizes 
-n.seq = seq(5, 100, by = 5)
-B.eff.seq = seq(0, -9, by = -1)
-N = 100
-
-# Create the A treatment
-A = list(
+trt.A = list(
   name = "A",
   effect = -10,
-  run = 5,
-  carry = 2
+  sd = 0.01,
+  run = 1,
+  carry = 1
 )
 
-sim1.results = NULL
+trt.B = list(
+  name = "B",
+  effect = 0,
+  sd = 0.01,
+  run = 0,
+  carry = 0
+)
 
-for (n in n.seq) {
-  print(paste("Running simulations for n.samples = ", n))
-  for (eff in B.eff.seq) {
+test.trts = list(
+  testing = c("A", "B"),
+  A = trt.A,
+  B = trt.B
+)
+
+# Visualization of the treatment profiles
+test.data = simulate.trial(test.trts,
+                           mu.b = 0, sd.b = 1, sd.o = 1, 
+                           order = c("A", "B", "B", "A"), 
+                           s.freq = 1, p.length = 20, n.blocks = 2,
+                           baseline.type = "markov") %>% 
+  mutate(
+    A = ifelse(treatment == "A", 1, 0)
+  )
+
+test.data %>% 
+  ggplot(aes(x = day)) + 
+  geom_line(aes(y = baseline), color = "black") +
+  geom_line(aes(y = obs), color = "gray") +
+  geom_line(aes(y = A.eff), color = "red") +
+  geom_line(aes(y = B.eff), color = "blue")
+```
+
+```{r}
+# Example of model based on the data
+nsamp.v.power.model = lmer(obs ~ A + (1|block), 
+                           data = nsamp.v.power.data)
+summary(nsamp.v.power.model)
+```
+
+```{r}
+# Set constants for this simulation
+nsamp.v.power.mu.b = 0
+nsamp.v.power.sd.b = 1
+nsamp.v.power.sd.o = 0.01
+nsamp.v.power.order = c("A", "B", "B", "A")
+nsamp.v.power.s.freq = 1
+nsamp.v.power.n.blocks = 2
+
+# Get a vector of candidate sample sizes 
+p.length.vec = 1:20
+A.eff.vec = seq(0.1, 1, by = 0.1)
+N = 100
+
+# Set up the placebo drug
+trt.B = list(
+  name = "B",
+  effect = 0,
+  sd = 0.01,
+  run = 0,
+  carry = 0
+)
+
+nsamp.v.power.results = NULL
+
+for (pl in p.length.vec) {
+  for (ae in A.eff.vec) {
     
-    # Mock up the B treatment
-    B = list(
-          name = "B",
-          effect = eff,
-          run = 2,
-          carry = 2
-        )
+    # Mock up the A treatment
+    trt.A = list(
+      name = "A",
+      effect = ae,
+      sd = 0.01,
+      run = 1,
+      carry = 1
+    )
     
-    trts = list(A, B)
+    trts = list(
+      testing = c("A", "B"),
+      A = trt.A, 
+      B = trt.B
+      )
     
-    eff.vec = integer(N)
+    # Empty array to store results of all the simulations
+    power.vec = integer(N)
+    dev.vec = integer(N)
+    
     for (i in 1:N) {
       # Create the simulated data set
       sim.data = simulate.trial(trts, 
-                                mu.b = 100, sd.b = 1,
-                                order = c("A", "B"), s.freq = 1, p.length = n, n.blocks = 1,
-                                tau.vec = c(1, 1), trt.type = "-")
+                                mu.b = nsamp.v.power.mu.b, 
+                                sd.b = nsamp.v.power.sd.b,
+                                order = nsamp.v.power.order, 
+                                s.freq = 1, 
+                                p.length = pl, 
+                                n.blocks = nsamp.v.power.n.blocks)
       
       sim.data = sim.data %>% 
         mutate(A = ifelse(treatment == "A", 1, 0))
@@ -88,116 +151,265 @@ for (n in n.seq) {
       sim.model = lm(obs ~ A, data = sim.data)
       
       # Detect significance from the t-statistic
-      eff.vec[i] = summary(sim.model)$coefficients[2,1]
+      power.vec[i] = summary(sim.model)$coefficients[2,4] <= 0.025
+      
+      # Calculate difference between estimated effect and the true effect 
+      dev.vec[i] = ae - summary(sim.model)$coefficients[2,1]
     }
     
     # Record the results of these parameters
     res = tibble(
-      n.samples = n,
-      effect.diff = A$effect - B$effect,
-      avg.est.effect = mean(eff.vec),
-      avg.deviation = A$effect - avg.est.effect
+      n.samples = nrow(sim.data),
+      effect.size = trt.A$effect,
+      mean.power = mean(power.vec),
+      mean.deviation = mean(dev.vec)
     )
-    sim1.results = bind_rows(sim1.results, res)
+    nsamp.v.power.results = bind_rows(nsamp.v.power.results, res)
   }
 }
+
+nsamp.v.power.results %>% 
+  ggplot(aes(x = n.samples, y = mean.power, group = factor(effect.size), color = factor(effect.size))) +
+  geom_line() +
+  geom_hline(yintercept = 0.8, alpha = 0.5, color = "gray") +
+  geom_hline(yintercept = 0.9, alpha = 0.5, color = "black") +
+  labs(
+    title = "Mean power based on sample size and effect size",
+    x = "Sample size",
+    y = "Mean Power"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+    )
 ```
 
 ```{r}
-sim1.results %>% 
-  ggplot(aes(x = n.samples, y = avg.deviation, group = factor(effect.diff), color = factor(effect.diff))) +
+nsamp.v.power.results %>% 
+  ggplot(aes(x = n.samples, y = mean.deviation, group = factor(effect.size), color = factor(effect.size))) +
   geom_line() +
   labs(
-    title = "Effect estimation based on sample size and effect difference",
+    title = "Effect estimation based on sample size and effect size",
     x = "Sample size",
-    y = "Average deviation"
-  )
+    y = "Average Deviation"
+  ) +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+    )
 ```
 
-# Baseline drift vs Average Deviation (by number of blocks)
+# Baseline Noise vs Average Deviation (by number of blocks) (needs work)
 
 What happens to the average deviation from the true effect if the baseline value has larger variance?
 
-Fixing:
+## Fixed Parameters:
 
-- treatment ordering to be A -> B
-- period length to be 20 days
-- sampling frequency to 1 a day
-- varying number of blocks from 1 to 5
+- Length of study: 160 days
+- $\mu_b = 0$
+- Effect of Treatment A: -10
+- Standard Deviation of Treament A: 1
+- Run-in of A: $\tau = 2$
+- Carryover of A: $\gamma = 2$
+- Treatment B is placebo, standard deviation of B is 1
+- Treatment order: A, B, B, A
+- Sampling frequency: 1/day
 
 ```{r}
-n.blocks = 1:4
-sd.b.seq = 1:10
-study.length = 120
+n.blocks = 2:5
+sd.b.seq = 1:5
+study.length = 240
+N = 100
+basenoise.v.deviation.mu.b = 0
+basenoise.v.deviation.order = c("A", "B")
+basenoise.v.deviation.s.freq = 1
 
-A = list(
+# Set up the treatments
+trt.A = list(
   name = "A",
   effect = -10,
-  run = 5,
+  sd = 0.01,
+  run = 2,
   carry = 2
 )
 
-B = list(
+# Set up the placebo drug
+trt.B = list(
   name = "B",
   effect = 0,
-  run = 5,
-  carry = 2
+  sd = 0.01,
+  run = 0,
+  carry = 0
 )
 
-trts = list(A, B)
+basenoise.v.deviation.trts = list(
+  testing = c("A", "B"),
+  A = trt.A,
+  B = trt.B
+)
 
-sim2.results = NULL
+basenoise.v.deviation.results = NULL
 
 for (n in n.blocks) {
+  print(paste("Checking ", n, "block/s"))
   
   # Adjusting the period length to keep the study length constant
-  adj.p.length = study.length / (n * length(trts))
+  adj.p.length = study.length / (2 * n)
   
   for (sdb in sd.b.seq) {
     
-    diff.vec = integer(N)
+    dev.vec = integer(N)
     
     for (i in 1:N) {
-      sim.data = simulate.trial(trts, 
-                                mu.b = 100, sd.b = sdb,
-                                order = c("A", "B"), s.freq = 1, p.length = adj.p.length, n.blocks = n,
-                                tau.vec = c(1, 1), trt.type = "-")
+      sim.data = simulate.trial(basenoise.v.deviation.trts, 
+                                mu.b = basenoise.v.deviation.mu.b, 
+                                sd.b = sdb,
+                                order = basenoise.v.deviation.order, 
+                                s.freq = basenoise.v.deviation.s.freq, 
+                                p.length = adj.p.length, 
+                                n.blocks = n,
+                                baseline.type = "markov")
       
       sim.data = sim.data %>% 
         mutate(A = ifelse(treatment == "A", 1, 0))
       
       # Run the model on the data
-      sim.model = lm(obs ~ A, data = sim.data)
+      sim.model = lm(obs ~ A + factor(block), data = sim.data)
+      
       
       # Calculate absolute difference from the true effect
-      diff.vec[i] = A$effect - summary(sim.model)$coefficients[2,1]
+      dev.vec[i] = trt.A$effect - summary(sim.model)$coefficients[2,1]
     }
     
     # Record the results of these parameters
     res = tibble(
       n.blocks = n,
       sd.b = sdb,
-      avg.deviation = mean(diff.vec),
+      avg.dev = mean(dev.vec),
     )
-    sim2.results = bind_rows(sim2.results, res)
+    basenoise.v.deviation.results = bind_rows(basenoise.v.deviation.results, res)
   }
 }
 
-sim2.results = sim2.results %>% 
+basenoise.v.deviation.results = basenoise.v.deviation.results %>% 
   mutate(
     n.blocks = factor(n.blocks)
   )
 
-sim2.results %>% 
-  ggplot(aes(x = sd.b, y = avg.deviation, color = n.blocks, group = n.blocks)) +
+basenoise.v.deviation.results %>% 
+  ggplot(aes(x = sd.b, y = avg.dev, color = n.blocks, group = n.blocks)) +
   geom_line() +
   labs(
     title = "Effect estimation based on sample size and effect difference",
-    x = "Baseline noise",
+    x = "Baseline standard deviation",
     y = "Average deviation"
   )
 ```
 
 
+# Run-in vs Effect Estimation
+
+## Fixed Parameters:
+
+- Baseline Level: $\mu_b = 0$
+- Baseline Noise: $\sd_b = 1$
+- Standard Deviation of Treament A: 1
+- Carryover of A: $\gamma = 2$
+- Treatment B is placebo, standard deviation of B is 1
+- Treatment order: A, B, B, A
+- Sampling frequency: 1/day
+- Period length: 20 days
+- Number of blocks: 4
+
+## Change
+
+- Effect of Treatment A will vary for effect size
+
+```{r}
+run.seq = seq(0.1, 10, length.out = 10)
+eff.seq = c(0.1, 0.5, 1, 2, 5)
+N = 100
+process.v.minsamp.mu.b = 0
+process.v.minsamp.sd.b = 1
+process.v.minsamp.order = c("A", "B", "B", "A")
+process.v.minsamp.p.length = 20
+process.v.minsamp.s.freq = 1  
+process.v.minsamp.n.blocks = 4
+
+# Set up the placebo drug
+trt.B = list(
+  name = "B",
+  effect = 0,
+  sd = 1,
+  run = 0,
+  carry = 0
+)
+
+process.v.minsamp.results = NULL
+
+for (r in run.seq) {
+  for (ae in eff.seq) {
+    
+    # Set up the treatments
+    trt.A = list(
+      name = "A",
+      effect = -1 * ae,
+      sd = 1,
+      run = r,
+      carry = 2
+    )
+    
+    process.v.minsamp.trts = list(
+      testing = c("A", "B"),
+      A = trt.A,
+      B = trt.B
+    )
+    
+    dev.vec = integer(N)
+    
+    for (i in 1:N) {
+      sim.data = simulate.trial(process.v.minsamp.trts, 
+                                mu.b = process.v.minsamp.mu.b, 
+                                sd.b = process.v.minsamp.sd.b,
+                                order = process.v.minsamp.order, 
+                                s.freq = process.v.minsamp.s.freq, 
+                                p.length = process.v.minsamp.p.length, 
+                                n.blocks = process.v.minsamp.n.blocks,
+                                baseline.type = "markov")
+      
+      sim.data = sim.data %>% 
+        mutate(A = ifelse(treatment == "A", 1, 0))
+      
+      # Run the model on the data
+      sim.model = lm(obs ~ A + factor(block), data = sim.data)
+      
+      
+      # Calculate absolute difference from the true effect
+      dev.vec[i] = trt.A$effect - summary(sim.model)$coefficients[2,1]
+    }
+    
+    # Record the results of these parameters
+    res = tibble(
+      run = r,
+      eff.size = ae,
+      avg.dev = mean(dev.vec),
+    )
+    
+    process.v.minsamp.results = bind_rows(process.v.minsamp.results, res)
+    
+  }
+}
+
+process.v.minsamp.results %>% 
+  ggplot(aes(x = run, y = avg.dev, color = eff.size, group = eff.size)) +
+  geom_line() +
+  labs(
+    title = "Effect estimation based on hypothetical run-in and effect difference",
+    x = "Run in",
+    y = "Average deviation"
+  )
+```
 
 
