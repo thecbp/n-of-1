@@ -1,0 +1,142 @@
+---
+title: "N-of-1 Design Selection"
+author: "Adina Zhang"
+date: "November 22, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+source("./sim.R")
+```
+
+
+```{r}
+# Set up inherent treatment characterizations
+# Treatment A has a true effect estimate of 10 unites from treatment B
+trt.A = list(
+  name = "A",
+  effect = -10,
+  sd = 0.01,
+  run = 1,
+  carry = 1
+)
+
+trt.B = list( 
+  name = "B",
+  effect = 0,
+  sd = 0.01,
+  run = 0,
+  carry = 0
+)
+
+sim.trts = list(
+  testing = c("A", "B"),
+  A = trt.A,
+  B = trt.B
+)
+
+```
+
+## Simulate different treatment orders
+
+```{r}
+# Create list for four different treatment orders
+trt_order = list(c("A", "B", "A", "B"),
+                 c("A", "B", "B", "A"),
+                 c("B", "A", "A", "B"),
+                 c("B", "A", "B", "A"))
+
+# Simulate with each treatment order, 50 times
+# Store results from orders
+order.results = tibble()
+for (order in 1:4) {
+  sim.results = tibble(order = rep(NA, 50),
+                       signif = rep(NA, 50),
+                       eff_est = rep(NA, 50)) 
+  for (i in 1:50) {
+    # Simulate trial
+    sim.data = simulate.trial(sim.trts,
+                              mu.b = 0, sd.b = 1, sd.o = 1,
+                              order = trt_order[[order]],
+                              s.freq = 1, p.length = 60, n.blocks = 2,
+                              baseline.type = "markov") %>% 
+      mutate(A = ifelse(treatment == "A", 1, 0),
+             block1 = ifelse(block == 1, 1, 0),
+             block2 = ifelse(block == 2, 1, 0))
+    
+    # Regress outcome on treatment
+    sim.fit = lm(obs ~ factor(A) + baseline + factor(block1) + factor(block2), 
+                 data = sim.data)
+    
+    # Store results
+    sim.results$order[i] = toString(trt_order[[order]])
+    sim.results$eff_est[i] = summary(sim.fit)$coefficients[2,1]
+    sim.results$signif = ifelse(summary(sim.fit)$coefficients[2,4] < 0.05, 1, 0)
+  }  
+
+  order.results = bind_rows(order.results, sim.results)
+}
+
+# Plot simulation results
+order.results %>% 
+  mutate(signif = factor(signif)) %>% 
+  ggplot(aes(x = order, y = eff_est)) + 
+  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
+  labs(x = "Treatment Order",
+       y = "Effect Estimate") + 
+  theme_bw()
+
+```
+
+## Simulate different sampling orders
+
+```{r}
+# Create list for four different treatment orders
+samp_order = c(1, 2, 5, 10, 15, 30)
+
+# Simulate with each treatment order, 50 times
+# Store results from orders
+order.results = tibble()
+for (order in 1:6) {
+  sim.results = tibble(order = rep(NA, 50),
+                       signif = rep(NA, 50),
+                       eff_est = rep(NA, 50)) 
+  for (i in 1:50) {
+    # Simulate trial
+    sim.data = simulate.trial(sim.trts,
+                              mu.b = 0, sd.b = 1, sd.o = 1,
+                              order = c("A", "B", "A", "B"),
+                              s.freq = samp_order[order], 
+                              p.length = 60, n.blocks = 2,
+                              baseline.type = "markov") %>% 
+      mutate(A = ifelse(treatment == "A", 1, 0))
+    
+    # Regress outcome on treatment
+    sim.fit = lm(obs ~ A, data = sim.data)
+    
+    # Store results
+    sim.results$order[i] = samp_order[order]
+    sim.results$eff_est[i] = summary(sim.fit)$coefficients[2,1]
+    sim.results$signif = ifelse(summary(sim.fit)$coefficients[2,4] < 0.05, 1, 0)
+  }  
+
+  order.results = bind_rows(order.results, sim.results)
+}
+
+# Plot simulation results
+order.results %>% 
+  mutate(signif = factor(signif),
+         order = factor(order)) %>% 
+  ggplot(aes(x = order, y = eff_est)) + 
+  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
+  geom_point(aes(y = median(eff_est[signif == 1]))) + 
+  labs(x = "Sampling Interval (days)",
+       y = "Effect Estimate") + 
+  theme_bw()
+
+```
+
