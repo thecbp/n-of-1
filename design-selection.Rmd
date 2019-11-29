@@ -41,6 +41,18 @@ sim.trts = list(
 
 ## Simulate different treatment orders
 
+**Fixed Parameters**
+- $\mu_b = 0$
+- $\sigma_b^2 = 5$
+- Effect of Treatment A: -10
+- Standard Deviation of Treament A: 1
+- Run-in of A: $\tau = 2$
+- Carryover of A: $\gamma = 2$
+- Treatment B is placebo, standard deviation of B is 1
+- Sampling frequency: 1/day
+- Period length: 20 days
+- Number of blocks: 2
+
 ```{r}
 # Create list for four different treatment orders
 trt_order = list(c("A", "B", "A", "B"),
@@ -60,7 +72,7 @@ for (order in 1:4) {
     sim.data = simulate.trial(sim.trts,
                               mu.b = 0, sd.b = 1, sd.o = 1,
                               order = trt_order[[order]],
-                              s.freq = 1, p.length = 60, n.blocks = 2,
+                              s.freq = 1, p.length = 20, n.blocks = 2,
                               baseline.type = "markov") %>% 
       mutate(A = ifelse(treatment == "A", 1, 0),
              block1 = ifelse(block == 1, 1, 0),
@@ -80,21 +92,28 @@ for (order in 1:4) {
 }
 
 # Plot simulation results
+results.summary = order.results %>% 
+  filter(signif == 1) %>% 
+  group_by(order) %>% 
+  summarize(median = median(eff_est))
+
 order.results %>% 
   mutate(signif = factor(signif)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
   geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
+  geom_point(data = results.summary, aes(x = order, y = median), size = 2) + 
   labs(x = "Treatment Order",
        y = "Effect Estimate") + 
-  theme_bw()
+  theme_bw() + 
+  theme(legend.position = "bottom")
 
 ```
 
 ## Simulate different sampling orders
 
 ```{r}
-# Create list for four different treatment orders
+# Create list for six different sampling intervals
 samp_order = c(1, 2, 5, 10, 15, 30)
 
 # Simulate with each treatment order, 50 times
@@ -110,12 +129,14 @@ for (order in 1:6) {
                               mu.b = 0, sd.b = 1, sd.o = 1,
                               order = c("A", "B", "A", "B"),
                               s.freq = samp_order[order], 
-                              p.length = 60, n.blocks = 2,
+                              p.length = 20, n.blocks = 2,
                               baseline.type = "markov") %>% 
-      mutate(A = ifelse(treatment == "A", 1, 0))
+      mutate(A = ifelse(treatment == "A", 1, 0),
+             block1 = ifelse(block == 1, 1, 0),
+             block2 = ifelse(block == 2, 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A, data = sim.data)
+    sim.fit = lm(obs ~ A + baseline + block1 + block2, data = sim.data)
     
     # Store results
     sim.results$order[i] = samp_order[order]
@@ -127,16 +148,135 @@ for (order in 1:6) {
 }
 
 # Plot simulation results
+results.summary = order.results %>% 
+  filter(signif == 1) %>% 
+  group_by(order) %>% 
+  summarize(median = median(eff_est))
+
 order.results %>% 
   mutate(signif = factor(signif),
          order = factor(order)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
   geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
-  geom_point(aes(y = median(eff_est[signif == 1]))) + 
+  geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
   labs(x = "Sampling Interval (days)",
+       y = "Effect Estimate") + 
+  theme_bw() + 
+  theme(legend.position = "bottom")
+
+```
+
+## Simulate period length
+
+```{r}
+# Create list for six different sampling intervals
+period_order = c(2, 5, 15, 30, 40, 60, 120)
+
+# Simulate with each treatment order, 50 times
+# Store results from orders
+order.results = tibble()
+for (order in period_order) {
+  sim.results = tibble(order = rep(NA, 50),
+                       signif = rep(NA, 50),
+                       eff_est = rep(NA, 50)) 
+  for (i in 1:50) {
+    # Simulate trial
+    sim.data = simulate.trial(sim.trts,
+                              mu.b = 0, sd.b = 1, sd.o = 1,
+                              order = c("A", "B", "A", "B"), s.freq = 1, 
+                              p.length = order, n.blocks = 2,
+                              baseline.type = "markov") %>% 
+      mutate(A = ifelse(treatment == "A", 1, 0),
+             block1 = ifelse(block == 1, 1, 0),
+             block2 = ifelse(block == 2, 1, 0))
+    
+    # Regress outcome on treatment
+    sim.fit = lm(obs ~ A + baseline + block1 + block2, data = sim.data)
+    
+    # Store results
+    sim.results$order[i] = order
+    sim.results$eff_est[i] = summary(sim.fit)$coefficients[2,1]
+    sim.results$signif = ifelse(summary(sim.fit)$coefficients[2,4] < 0.05, 1, 0)
+  }  
+
+  order.results = bind_rows(order.results, sim.results)
+}
+
+# Plot simulation results
+results.summary = order.results %>% 
+  filter(signif == 1) %>% 
+  group_by(order) %>% 
+  summarize(median = median(eff_est))
+
+order.results %>% 
+  mutate(signif = factor(signif),
+         order = factor(order)) %>% 
+  ggplot(aes(x = order, y = eff_est)) + 
+  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
+  geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
+  labs(x = "Period length (days)",
        y = "Effect Estimate") + 
   theme_bw()
 
 ```
 
+## Simulate number of blocks
+
+```{r, warning = FALSE, echo = FALSE}
+# Create list for six different sampling intervals
+n_block = c(1:6)
+
+# Simulate with each treatment order, 50 times
+# Store results from orders
+order.results = tibble()
+for (n in n_block) {
+  sim.results = tibble(n_block = rep(NA, 50),
+                       signif = rep(NA, 50),
+                       eff_est = rep(NA, 50)) 
+  for (i in 1:50) {
+    # Simulate trial
+    sim.data = simulate.trial(sim.trts,
+                              mu.b = 0, sd.b = 1, sd.o = 1,
+                              order = c("A", "B", "A", "B"), s.freq = 1, 
+                              p.length = 20, n.blocks = n,
+                              baseline.type = "markov") %>% 
+      mutate(A = ifelse(treatment == "A", 1, 0),
+             block1 = ifelse(block == 1, 1, 0),
+             block2 = ifelse(block == 2, 1, 0),
+             block3 = ifelse(block == 3, 1, 0),
+             block4 = ifelse(block == 4, 1, 0),
+             block5 = ifelse(block == 5, 1, 0))
+    
+    # Regress outcome on treatment
+    sim.fit = lm(obs ~ A + baseline + block1 + block2 + block3 + block4 + block5, 
+                 data = sim.data)
+    
+    # Store results
+    sim.results$n_block[i] = n
+    sim.results$eff_est[i] = summary(sim.fit)$coefficients[2,1]
+    sim.results$signif = ifelse(summary(sim.fit)$coefficients[2,4] < 0.05, 1, 0)
+  }  
+
+  order.results = bind_rows(order.results, sim.results)
+}
+
+# Plot simulation results
+results.summary = order.results %>% 
+  filter(signif == 1) %>% 
+  group_by(n_block) %>% 
+  summarize(median = median(eff_est))
+
+order.results %>% 
+  mutate(signif = factor(signif),
+         order = factor(n)) %>% 
+  ggplot(aes(x = n_block, y = eff_est)) + 
+  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
+  geom_point(data = results.summary, aes(x = n_block, y = median), size = 2) + 
+  labs(x = "Number of Blocks",
+       y = "Effect Estimate") + 
+  theme_bw()
+
+```
