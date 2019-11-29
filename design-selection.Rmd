@@ -74,12 +74,10 @@ for (order in 1:4) {
                               order = trt_order[[order]],
                               s.freq = 1, p.length = 20, n.blocks = 2,
                               baseline.type = "markov") %>% 
-      mutate(A = ifelse(treatment == "A", 1, 0),
-             block1 = ifelse(block == 1, 1, 0),
-             block2 = ifelse(block == 2, 1, 0))
+      mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ factor(A) + baseline + factor(block1) + factor(block2), 
+    sim.fit = lm(obs ~ factor(A) + baseline + factor(block), 
                  data = sim.data)
     
     # Store results
@@ -131,12 +129,10 @@ for (order in 1:6) {
                               s.freq = samp_order[order], 
                               p.length = 20, n.blocks = 2,
                               baseline.type = "markov") %>% 
-      mutate(A = ifelse(treatment == "A", 1, 0),
-             block1 = ifelse(block == 1, 1, 0),
-             block2 = ifelse(block == 2, 1, 0))
+      mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + block1 + block2, data = sim.data)
+    sim.fit = lm(obs ~ A + baseline + factor(block), data = sim.data)
     
     # Store results
     sim.results$order[i] = samp_order[order]
@@ -187,12 +183,10 @@ for (order in period_order) {
                               order = c("A", "B", "A", "B"), s.freq = 1, 
                               p.length = order, n.blocks = 2,
                               baseline.type = "markov") %>% 
-      mutate(A = ifelse(treatment == "A", 1, 0),
-             block1 = ifelse(block == 1, 1, 0),
-             block2 = ifelse(block == 2, 1, 0))
+      mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + block1 + block2, data = sim.data)
+    sim.fit = lm(obs ~ A + baseline + factor(block), data = sim.data)
     
     # Store results
     sim.results$order[i] = order
@@ -226,7 +220,7 @@ order.results %>%
 
 ```{r, warning = FALSE, echo = FALSE}
 # Create list for six different sampling intervals
-n_block = c(1:6)
+n_block = c(2:6)
 
 # Simulate with each treatment order, 50 times
 # Store results from orders
@@ -242,15 +236,10 @@ for (n in n_block) {
                               order = c("A", "B", "A", "B"), s.freq = 1, 
                               p.length = 20, n.blocks = n,
                               baseline.type = "markov") %>% 
-      mutate(A = ifelse(treatment == "A", 1, 0),
-             block1 = ifelse(block == 1, 1, 0),
-             block2 = ifelse(block == 2, 1, 0),
-             block3 = ifelse(block == 3, 1, 0),
-             block4 = ifelse(block == 4, 1, 0),
-             block5 = ifelse(block == 5, 1, 0))
+      mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + block1 + block2 + block3 + block4 + block5, 
+    sim.fit = lm(obs ~ A + baseline + factor(block), 
                  data = sim.data)
     
     # Store results
@@ -269,8 +258,7 @@ results.summary = order.results %>%
   summarize(median = median(eff_est))
 
 order.results %>% 
-  mutate(signif = factor(signif),
-         order = factor(n)) %>% 
+  mutate(signif = factor(signif)) %>% 
   ggplot(aes(x = n_block, y = eff_est)) + 
   geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
