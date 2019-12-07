@@ -133,11 +133,14 @@ expdecay = function(start, target, tau, delta_t) {
 
 data1 = tibble(
   x = 1:20,
-  y = expdecay(0, all.trts$A$effect, all.trts[["A"]]$run, x),
+  y = expdecay(0, test.trts$A$effect, 10, x),
+  z = expdecay(test.trts$A$effect, 0, 2, x)
 )
 
 ggplot(data1, aes(x = x, y = y)) +
-  geom_line(color = "red") 
+  geom_line(color = "red") +
+  geom_line(aes(y = z), color = "blue") 
+  
 ```
 
 ```{r}
@@ -300,12 +303,16 @@ test %>%
   geom_line(aes(y = D.eff), color = "purple") +
   geom_line(aes(y = obs), color = "gray") +
   labs(
-    title = "Visualization of simulated baseline, treatment effects, & observation",
     x = "Day of treatment", 
     y = "Outcome value"
   ) + 
   theme(legend.position = "bottom")
 ```
+
+```{r}
+kable(head(test))
+```
+
 
 derive power for the 
 

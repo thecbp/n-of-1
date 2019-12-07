@@ -6,6 +6,7 @@ output: html_document
 ```{r, message = F, warning = F }
 library(tidyverse)
 library(lme4)
+library(kableExtra)
 source("sim.R")
 ```
 
@@ -81,10 +82,7 @@ test.data %>%
 ```
 
 ```{r}
-# Example of model based on the data
-nsamp.v.power.model = lmer(obs ~ A + (1|block), 
-                           data = nsamp.v.power.data)
-summary(nsamp.v.power.model)
+kable(head(test.data)) %>% kable_styling()
 ```
 
 ```{r}
@@ -326,6 +324,7 @@ basenoise.v.deviation.results %>%
 ## Change
 
 - Effect of Treatment A will vary for effect size
+- Run-in of A will vary
 
 ```{r}
 run.seq = seq(0.1, 10, length.out = 10)
@@ -333,7 +332,7 @@ eff.seq = c(0.1, 0.5, 1, 2, 5)
 N = 100
 process.v.minsamp.mu.b = 0
 process.v.minsamp.sd.b = 1
-process.v.minsamp.order = c("A", "B", "B", "A")
+process.v.minsamp.order = c("A", "B")
 process.v.minsamp.p.length = 20
 process.v.minsamp.s.freq = 1  
 process.v.minsamp.n.blocks = 4
@@ -402,6 +401,11 @@ for (r in run.seq) {
   }
 }
 
+process.v.minsamp.results = process.v.minsamp.results %>% 
+  mutate(
+    eff.size = factor(eff.size)
+  )
+
 process.v.minsamp.results %>% 
   ggplot(aes(x = run, y = avg.dev, color = eff.size, group = eff.size)) +
   geom_line() +
@@ -409,6 +413,366 @@ process.v.minsamp.results %>%
     title = "Effect estimation based on hypothetical run-in and effect difference",
     x = "Run in",
     y = "Average deviation"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+  )
+```
+
+# Carryover vs Effect Estimation
+
+## Fixed Parameters:
+
+- Baseline Level: $\mu_b = 0$
+- Baseline Noise: $\sd_b = 1$
+- Standard Deviation of Treament A: 1
+- Run-in of A: $\gamma = 2$
+- Carryover of A: $\gamma = 2$
+- Standard deviation of B is 1
+- Run-in of B: $\gamma = 0$
+- Treatment order: A, B
+- Sampling frequency: 1/day
+- Period length: 20 days
+- Number of blocks: 4
+
+## Change
+
+- Effect of Treatment B will vary for effect size
+- Carryover of B will vary
+
+```{r}
+carry.seq = 1:10
+eff.seq = (0:9) * -1
+N = 100
+effect.v.carry.mu.b = 0
+effect.v.carry.sd.b = 1
+effect.v.carry.order = c("A", "B", "B", "A")
+effect.v.carry.p.length = 20
+effect.v.carry.s.freq = 1  
+effect.v.carry.n.blocks = 4
+
+# Set up the treatments
+trt.A = list(
+  name = "A",
+  effect = -10,
+  sd = 1,
+  run = 2,
+  carry = 2
+  )
+
+effect.v.carry.results = NULL
+
+for (c in carry.seq) {
+  for (be in eff.seq) {
+    
+    trt.B = list(
+      name = "B",
+      effect = be,
+      sd = 1,
+      run = 0,
+      carry = c
+    )
+    
+    effect.v.carry.trts = list(
+      testing = c("A", "B"),
+      A = trt.A,
+      B = trt.B
+    )
+    
+    dev.vec = integer(N)
+    
+    for (i in 1:N) {
+      sim.data = simulate.trial(effect.v.carry.trts, 
+                                mu.b = effect.v.carry.mu.b, 
+                                sd.b = effect.v.carry.sd.b,
+                                order = effect.v.carry.order, 
+                                s.freq = effect.v.carry.s.freq, 
+                                p.length = effect.v.carry.p.length, 
+                                n.blocks = effect.v.carry.n.blocks,
+                                baseline.type = "markov")
+      
+      sim.data = sim.data %>% 
+        mutate(A = ifelse(treatment == "A", 1, 0))
+      
+      # Run the model on the data
+      sim.model = lm(obs ~ A + factor(block), data = sim.data)
+      
+      # Calculate absolute difference from the true effect
+      dev.vec[i] = trt.A$effect - summary(sim.model)$coefficients[2,1]
+    }
+    
+    # Record the results of these parameters
+    res = tibble(
+      eff.diff = effect.v.carry.trts$A$effect - effect.v.carry.trts$B$effect,
+      avg.dev = mean(dev.vec),
+      carry = c
+    )
+    
+    effect.v.carry.results = bind_rows(effect.v.carry.results, res)
+    
+  }
+}
+
+effect.v.carry.results = effect.v.carry.results %>% 
+  arrange(eff.diff, carry) %>% 
+  mutate(
+    eff.diff = factor(eff.diff)
+  ) 
+  
+
+effect.v.carry.results %>% 
+  ggplot(aes(x = carry, y = avg.dev, color = eff.diff, group = eff.diff)) +
+  geom_line() +
+  labs(
+    title = "Average deviation as a function of carryover of treament B",
+    x = "Carryover",
+    y = "Average deviation"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+  )
+```
+
+# Process Noise vs Minimum Sample Size to reach 80% power
+
+## Fixed Parameters:
+
+- Baseline Level: $\mu_b = 0$
+- Baseline Noise: $\sd_b = 1$
+- Run-in of A: $\gamma = 2$
+- Carryover of A: $\gamma = 2$
+- Standard deviation of B is 1
+- Treatment B is placebo
+- Treatment order: A, B
+- Sampling frequency: 1/day
+- Number of blocks: 4
+
+## Change
+
+- Period length will vary
+- Standard deviation of A will vary
+
+```{r}
+sd.seq = seq(0.1, 2, length.out = 10)
+eff.seq = c(0.25, 0.33, 0.5, 0.75, 1, 1.5)
+samp.candidates = 1:200
+N = 100
+power.v.minsamp.mu.b = 0
+power.v.minsamp.sd.b = 0.0001
+power.v.minsamp.order = c("A", "B")
+power.v.minsamp.s.freq = 1  
+power.v.minsamp.n.blocks = 2
+
+power.v.minsamp.results = NULL
+
+for (s in sd.seq) {
+  for (ae in eff.seq) {
+    prog = paste("Simulations for proc.noise", s, "with effect size", ae, "...", sep = " ")
+    print(prog)
+    trt.A = list(
+      name = "A",
+      effect = -1 * ae * s,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+    
+    trt.B = list(
+      name = "B",
+      effect = 0,
+      sd = 0.0001,
+      run = 0,
+      carry = 0
+    )
+    
+    power.v.minsamp.trts = list(
+      testing = c("A", "B"),
+      A = trt.A,
+      B = trt.B
+    )
+    
+    
+    for (cand.p in samp.candidates) {
+      sig.vec = integer(N)
+      for (i in 1:N) {
+        sim.data = simulate.trial(power.v.minsamp.trts, 
+                                  mu.b = power.v.minsamp.mu.b, 
+                                  sd.b = power.v.minsamp.sd.b,
+                                  order = power.v.minsamp.order, 
+                                  s.freq = power.v.minsamp.s.freq, 
+                                  p.length = cand.p, 
+                                  n.blocks = power.v.minsamp.n.blocks,
+                                  baseline.type = "markov")
+        
+        sim.data = sim.data %>% mutate(A = ifelse(treatment == "A", 1, 0))
+        
+        # Run the model on the data
+        sim.model = lm(obs ~ A + factor(block), data = sim.data)
+        
+        sig.vec[i] = summary(sim.model)$coefficients[2,4] < 0.05
+      }
+      
+      if (mean(sig.vec) >= 0.80) {
+        print(paste("Break at", cand.p, sep  = " "))
+        break
+      }
+    }
+    
+    # Record the results of these parameters
+    res = tibble(
+      eff.size = ae,
+      min.samp = cand.p,
+      proc.noise = s
+    )
+    
+    power.v.minsamp.results = bind_rows(power.v.minsamp.results, res)
+    
+  }
+}
+
+power.v.minsamp.results = power.v.minsamp.results %>% 
+  mutate(
+    eff.size = factor(eff.size)
+  ) 
+
+power.v.minsamp.results %>% 
+  ggplot(aes(x = proc.noise, y = min.samp, color = eff.size, group = eff.size)) +
+  geom_line() +
+  labs(
+    title = "blah",
+    x = "Process noise",
+    y = "Minimum samples needed to reach 80% Power"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+  )
+```
+
+# Baseline Noise vs Minimum Sample Size to be within 10% of True Treatment Effect
+
+## Fixed Parameters:
+
+- Baseline Level: $\mu_b = 0$
+- Baseline Noise: $\sd_b = 1$
+- Treatment Effect of A: -10
+- Run-in of A: $\gamma = 2$
+- Carryover of A: $\gamma = 2$
+- Standard deviation of B is 1
+- Treatment B is placebo
+- Treatment order: A, B
+- Sampling frequency: 1/day
+- Number of blocks: 4
+
+## Change
+
+- Period length will vary
+- Standard deviation of A will vary
+
+```{r}
+sdb.seq = seq(0.1, 2, length.out = 10)
+eff.seq = seq(0.1, 1, by = 0.1)
+samp.candidates = 1:200
+N = 100
+dev10prct.v.minsamp.mu.b = 0
+dev10prct.v.minsamp.order = c("A", "B")
+dev10prct.v.minsamp.s.freq = 1  
+dev10prct.v.minsamp.n.blocks = 2
+dev10prct.v.minsamp.results = NULL
+
+for (s in sdb.seq) {
+  for (ae in eff.seq) {
+    prog = paste("Simulations for baseline noise", s, "with effect size", ae*s, "...", sep = " ")
+    print(prog)
+    
+    trt.A = list(
+      name = "A",
+      effect = ae * s,
+      sd = 1,
+      run = 2,
+      carry = 2
+      )
+    
+    trt.B = list(
+      name = "B",
+      effect = 0,
+      sd = 0.0001,
+      run = 0,
+      carry = 0
+    )
+    
+    dev10prct.v.minsamp.trts = list(
+      testing = c("A", "B"),
+      A = trt.A,
+      B = trt.B
+    )
+    
+    
+    for (cand.p in samp.candidates) {
+      coeff.vec = integer(N)
+      for (i in 1:N) {
+        sim.data = simulate.trial(dev10prct.v.minsamp.trts, 
+                                  mu.b = dev10prct.v.minsamp.mu.b, 
+                                  sd.b = s,
+                                  order = dev10prct.v.minsamp.order, 
+                                  s.freq = dev10prct.v.minsamp.s.freq, 
+                                  p.length = cand.p, 
+                                  n.blocks = dev10prct.v.minsamp.n.blocks,
+                                  baseline.type = "markov")
+        
+        sim.data = sim.data %>% mutate(A = ifelse(treatment == "A", 1, 0))
+        
+        # Run the model on the data
+        sim.model = lm(obs ~ A + factor(block), data = sim.data)
+        
+        # Check for significance and then add the coefficient
+        coeff.vec[i] = ifelse(
+          summary(sim.model)$coefficients[2,4] < 0.05,
+          sim.model$coefficients[2],
+          0
+          )
+      }
+      
+      if (abs(mean(coeff.vec) - trt.A$effect) < 0.1) {
+        print(paste("Break at", cand.p, sep  = " "))
+        break
+      }
+    }
+    
+    # Record the results of these parameters
+    res = tibble(
+      eff.size = ae,
+      min.samp = cand.p,
+      baseline.noise = s
+    )
+    
+    dev10prct.v.minsamp.results = bind_rows(dev10prct.v.minsamp.results, res)
+    
+  }
+}
+
+dev10prct.v.minsamp.results = dev10prct.v.minsamp.results %>% 
+  mutate(
+    eff.size = factor(eff.size)
+  ) 
+
+dev10prct.v.minsamp.results %>% 
+  ggplot(aes(x = baseline.noise, y = min.samp, color = eff.size, group = eff.size)) +
+  geom_line() +
+  labs(
+    title = "Minimum number of samples needed to estimate\n treatment effect within 10% significantly on average",
+    x = "Baseline noise",
+    y = "Minimum samples needed to reach 10% margin"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
   )
 ```
 

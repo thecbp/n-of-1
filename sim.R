@@ -154,7 +154,7 @@ model.outcome = function(bb,
                                                       0, 
                                                       all.trts[[cur.trt]]$carry, 
                                                       1:distance) +
-          rnorm(distance, 0, all.trts[[cur.trt]]$sd) # process noise of the treatments
+          rnorm(distance, sd = all.trts[[cur.trt]]$sd) # process noise of the treatments
       }
     }
   }
