@@ -1,0 +1,6 @@
+---
+title: "P8133 Term Paper"
+author: "Adina Zhang & Christian Pascual"
+date: "12/6/2019"
+output: pdf_document
+---
