@@ -197,7 +197,7 @@ simulate.trial = function(trts,
                           order = c("A", "B"), 
                           s.freq = 1, 
                           p.length = 1, 
-                          n.blocks = 1,
+                          n.blocks = 1,1
                           baseline.type = "normal") {
   
   # Create the backbone
