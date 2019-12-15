@@ -17,7 +17,7 @@ source("./sim.R")
 # Treatment A has a true effect estimate of 10 unites from treatment B
 trt.A = list(
   name = "A",
-  effect = -10,
+  effect = -2,
   sd = 0.01,
   run = 1,
   carry = 1
@@ -77,7 +77,7 @@ for (order in 1:4) {
       mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ factor(A) + baseline + factor(block), 
+    sim.fit = lm(obs ~ factor(A) + factor(block), 
                  data = sim.data)
     
     # Store results
@@ -98,10 +98,11 @@ results.summary = order.results %>%
 order.results %>% 
   mutate(signif = factor(signif)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = order, y = median), size = 2) + 
-  labs(x = "Treatment Order",
+  labs(title = "Treatment orders vs effect estimate",
+       x = "Treatment Order",
        y = "Effect Estimate") + 
   theme_bw() + 
   theme(legend.position = "bottom")
@@ -132,7 +133,7 @@ for (order in 1:6) {
       mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + factor(block), data = sim.data)
+    sim.fit = lm(obs ~ A + factor(block), data = sim.data)
     
     # Store results
     sim.results$order[i] = samp_order[order]
@@ -153,10 +154,11 @@ order.results %>%
   mutate(signif = factor(signif),
          order = factor(order)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
-  labs(x = "Sampling Interval (days)",
+  labs(title = "Sampling intervals vs Effect Estimate",
+       x = "Sampling Interval",
        y = "Effect Estimate") + 
   theme_bw() + 
   theme(legend.position = "bottom")
@@ -186,7 +188,7 @@ for (order in period_order) {
       mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + factor(block), data = sim.data)
+    sim.fit = lm(obs ~ A + factor(block), data = sim.data)
     
     # Store results
     sim.results$order[i] = order
@@ -204,15 +206,17 @@ results.summary = order.results %>%
   summarize(median = median(eff_est))
 
 order.results %>% 
-  mutate(signif = factor(signif),
+  mutate(signif = factor(signif, levels = c("1", "0")),
          order = factor(order)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
-  labs(x = "Period length (days)",
+  labs(title = "Period length vs Effect Estimate",
+       x = "Period length (days)",
        y = "Effect Estimate") + 
-  theme_bw()
+  theme_bw() + 
+  theme(legend.position = "bottom")
 
 ```
 
@@ -220,7 +224,7 @@ order.results %>%
 
 ```{r, warning = FALSE, echo = FALSE}
 # Create list for six different sampling intervals
-n_block = c(2:6)
+n_block = c(1:6)
 
 # Simulate with each treatment order, 50 times
 # Store results from orders
@@ -239,8 +243,14 @@ for (n in n_block) {
       mutate(A = ifelse(treatment == "A", 1, 0))
     
     # Regress outcome on treatment
-    sim.fit = lm(obs ~ A + baseline + factor(block), 
+    if (n == 1) {
+      sim.fit = lm(obs ~ A, data = sim.data )
+    }
+    
+    else {
+      sim.fit = lm(obs ~ A + factor(block), 
                  data = sim.data)
+    }
     
     # Store results
     sim.results$n_block[i] = n
@@ -259,12 +269,14 @@ results.summary = order.results %>%
 
 order.results %>% 
   mutate(signif = factor(signif)) %>% 
-  ggplot(aes(x = n_block, y = eff_est)) + 
-  geom_hline(yintercept = -10, linetype = "dashed", size = 1) + 
+  ggplot(aes(x = factor(n_block), y = eff_est)) + 
+  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
-  geom_point(data = results.summary, aes(x = n_block, y = median), size = 2) + 
-  labs(x = "Number of Blocks",
+  geom_point(data = results.summary, aes(x = factor(n_block), y = median), size = 2) + 
+  labs(title = "Number of blocks vs Effect Treatment",
+       x = "Number of Blocks",
        y = "Effect Estimate") + 
-  theme_bw()
+  theme_bw() + 
+  theme(legend.position = "bottom")
 
 ```
