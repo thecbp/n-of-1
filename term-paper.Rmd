@@ -20,7 +20,7 @@ fig1cap = "An example simulation output. Baseline value was initialized at 100 w
 
 # Introduction
 
-## Clinicak Relevance
+## Clinical Relevance
 
 ## Problem Formulation
 
