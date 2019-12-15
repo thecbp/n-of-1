@@ -1,6 +1,242 @@
 ---
-title: "P8133 Term Paper"
+title: "P8133 Term Paper: N-of-1 Trial Simulation"
 author: "Adina Zhang & Christian Pascual"
-date: "12/6/2019"
-output: pdf_document
+date: "12/16/2019"
+output: 
+  pdf_document:
+    number_sections: true
+    df_print: kable
+fontsize: 11pt
+geometry: margin = 1in
 ---
+    
+```{r, echo = F, message = F, warning = F }
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+fig1cap = "An example simulation output. Baseline value was initialized at 100 with $\\sigma_b^2 = 5$. Treatment A (red) has a true effect of -30 with a carryover constant of 2, run-in constant of 2 and $\\sigma^2_A = 1$. Treatment B (blue) is a placebo with no treatment effect 0, no carryover or run-in and $\\sigma^2_B = 1$. Other treatments (C) were not specified and do not contribute to the observed effect."
+```
+
+# Introduction
+
+## Clinicak Relevance
+
+## Problem Formulation
+
+# Methods
+
+## Simulation Parameters
+
+## Data Generation Process
+
+```{r params-table, echo = F }
+params = tibble(
+  `Parameter` = c(
+    "Sampling Frequency",
+    "Period Length",
+    "Number of Treatments",
+    "Treatment Order",
+    "Number of Blocks",
+    "Treatment Effect",
+    "Carryover",
+    "Run-in",
+    "Treatment Noise",
+    "Baseline Start",
+    "Baseline Noise"
+  ),
+  `Notation` = c(
+    "$F$",
+    "$P$",
+    "$T$",
+    "$O$",
+    "$B$",
+    "$E_k$",
+    "$\\tau_k$",
+    "$\\gamma_k$",
+    "$\\sigma^2_k$",
+    "$\\mu_b$",
+    "$\\sigma^2_b$"
+  ),
+  `Type` = c(
+    rep("Design", 5),
+    rep("Treatment", 4),
+    rep("Outcome", 2)
+  ),
+  `Description` = c(
+    "Number of times patient is sampled in one period",
+    "Length of the treatment period",
+    "How many treatments used in trial",
+    "Order of treatments given to patient in single block",
+    "How many treatment blocks used in trial",
+    "Effect of treatment $T$ on the baseline",
+    "Constant affecting how long it takes for effect of treatment $k$ to go away",
+    "Constant affecting how long it takes for full effect of treatment $k$ to occur",
+    "How much will the treatment $k$ effect vary overall",
+    "Starting value for the baseline Markov chain",
+    "How much can the Markov chain move at each time point"
+  )
+)
+
+kable(params, "latex", 
+      booktabs = T, 
+      escape = F, 
+      linesep = " ",
+      caption = "Tunable parameters in our N-of-1 trial simulation software"
+      ) %>% 
+  kable_styling(
+    latex_options = "striped",
+    full_width = T,
+    font_size = 9
+    ) %>% 
+  column_spec(1, width = "10em") %>% 
+  column_spec(4, width = "25em")
+```
+
+Table 1 summarizes all of the parameters that a user can tune in our simulation software. We denote $B(t)$ as the baseline outcome value of a subject at time $t$, which has values going from $1, \ldots, F \times T \times P \times B$. A subject's baseline outcome value is modeled as a Markov process. Given a starting value $\mu_b$, the next value in the chain is calculated using $\sigma^2_b$ as:
+
+$$
+\mu_{t+1} = \mu_t + M, \hspace{10mm} M \sim N(0, \sigma^2_b)
+$$
+
+We denote the treatment effect for treatment $k$ as $X(t)$ which has two subcomponents: a deterministic component $X_{det}(t)$ and a random component $X_{ran}(t)$. The treatment is modeled as an exponential decay from a starting value $a$ to a target value $b$. Using $\alpha$ to denote a general time constant, the decay was modeled as:
+
+$$
+X_{det}(t) = b + (a - b)e^{-\Delta t/\alpha}
+$$
+
+where $\Delta t$ is a vector of values spanning an entire period length. When treatment is currently being taken, $\alpha = \gamma_k$ since its full effect is running in, and the start and target values are 0 and $E_k$ respectively. When the treatment is not being taken, $\alpha = \tau_k$, and the start and target values are $E_k$ and 0. The random component is a normal random variable with variance $\sigma^2_k$, so $X_{ran}(t) \sim N(0, \sigma^2_k)$. Each treatment has both a deterministic and random component, so the cumulative effect over all $T$ treatments is represented as the total sum over all $T$ treatments.
+
+$$
+\sum^T_{i=1} X^i(t) = \sum^T_{i=1} \bigg( X_{det}^i (t) + X_{ran}^i (t)\bigg)
+$$
+
+We denote $Y(t)$ as the *observed* clinical value for a subject, and it is simply the sum of the baseline outcome value and the total treatment effect.
+
+$$
+Y(t) = B(t) + \sum^T_{i=1} X^i(t)
+$$
+
+Figure 1 visualizes an example output of our simulation software.
+
+```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig1cap}
+include_graphics('../img/simulation-output.png')
+```
+
+## Simulation Scope
+
+## Statistical Analyses
+
+For our analyses, we have chosen to perform regression analyses as recommended by Kravitz et. al in the AHRQ Handbook. The clinical outcome will be modeled as a linear function of $T-1$ indicator variables for each treatment using a placebo as the reference and $B-1$ indicator variables for each block using the first block as the reference. The model can be written as:
+
+$$
+Y_{kb} = \beta_0 + \beta'_1 \mathbf{T} +\beta_2'\mathbf{B} + \epsilon_{kb}
+$$
+
+where $\mathbf{T}$ is the matrix of treatment indicator variables indexed by $k$ and $\mathbf{B}$ is the matrix of block indicators indexed by $b$. After some exploratory analytical testing, we found this model to provide accurate estimates while remainining estimable. We attempted to use linear mixed-effects models, but we found that we were not generating enough data for the models to converge.
+
+A significant result in a simulation is defined as when the regression coefficient associated with the active treatment to be significant ($p < 0.05$). Overall power of a given set of simulations was defined as the proportion of which obtain a significant result for the active treatment. Finally, we define the probability of correct selection (PCS) as the proportion of simulation trials where the resulting coefficient estimate for treatment satisfies a pre-specified condition, such as maximization of effect or choosing the treatment that avoids unnecessary under- or over-treatment.
+
+For our study, we investigate how different sets of design and treatment parameters have the potential to affect the overall power, effect estimation and PCS. We use this criteria as a balance between researchers who may want to maximize power and accurate estimation against patient interests, who will want to find the correct treatment as soon as possible while minimizing harm and cost.
+
+## Performance Metrics
+
+# Results
+
+## Case Study
+
+## Sample Size & Power
+
+## Minimum Sample Size & Average Deviation
+
+## Selection for maximal effect
+
+## Selection in an optimal treatment window
+
+
+
+# Discussion
+
+## Study Intent
+## Recommendations
+### Power
+### Probability of Correct Selection
+### Effect Estimation
+## Limitations
+## Reflection
+### Adina
+### Christian
+
+
+\pagebreak
+
+# References
+
+\pagebreak
+
+# Supplement
+
+```{r supplement-tbl, echo = F }
+supp.params = tibble(
+  `Parameter` = c(
+    "Sampling Frequency",
+    "Period Length",
+    "Number of Treatments",
+    "Treatment Order",
+    "Number of Blocks",
+    "Treatment Effect",
+    "Carryover",
+    "Run-in",
+    "Treatment Noise",
+    "Baseline Start",
+    "Baseline Noise",
+    "Number simulations"
+  ),
+  `Notation` = c(
+    "$F$",
+    "$P$",
+    "$T$",
+    "$O$",
+    "$B$",
+    "$E_k$",
+    "$\\tau_k$",
+    "$\\gamma_k$",
+    "$\\sigma^2_k$",
+    "$\\mu_b$",
+    "$\\sigma^2_b$",
+    "$N$"
+  ),
+  `2a` = c(
+    "1", "Varies", "2", "A, B, B, A", "2",
+    "Varies", "2", "2", "0.01", "0", "1", "100"
+  ),
+  `2b` = c(
+    "1", "Varies", "2", "A, B, B, A", "2",
+    "Varies", "2", "2", "0.01", "0", "Varies", "100"
+  ),
+  `2c` = c(
+    "1", "Varies", "3", "A, B, C", "2",
+    "-5, Varies", "2", "2", "Varies", "100", "1", "100"
+  ),
+  `2d` = c(
+    "1", "Varies", "4", "A, B, C, D", "2",
+    "-5, Others Varies", "2", "2", "Varies", "100", "1", "100"
+  )
+)
+
+kable(supp.params, "latex", 
+      booktabs = T, 
+      escape = F, 
+      linesep = " ",
+      caption = "Parameters used in different simulations for Figure 2"
+      ) %>% 
+  kable_styling(
+    latex_options = "striped",
+    full_width = T,
+    font_size = 9
+    )
+```
+
+
+
+

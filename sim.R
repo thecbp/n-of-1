@@ -209,8 +209,9 @@ simulate.trial = function(trts,
   # Model the treatment effects
   full.data = model.outcome(bb, trts, 
                             mu.b = mu.b, 
-                            sd.b = sd.b, sd.o = sd.o,
-                            baseline.type = "normal")
+                            sd.b = sd.b, 
+                            sd.o = sd.o,
+                            baseline.type = baseline.type)
   
   return(full.data)
 }

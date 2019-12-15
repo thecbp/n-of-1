@@ -43,18 +43,18 @@ source("sim.R")
 ```{r}
 trt.A = list(
   name = "A",
-  effect = -10,
-  sd = 0.01,
-  run = 1,
-  carry = 1
+  effect = -30,
+  sd = 2,
+  run = 3,
+  carry = 4
 )
 
 trt.B = list(
   name = "B",
-  effect = 0,
-  sd = 0.01,
-  run = 0,
-  carry = 0
+  effect = -50,
+  sd = 4,
+  run = 5,
+  carry = 2
 )
 
 test.trts = list(
@@ -65,7 +65,7 @@ test.trts = list(
 
 # Visualization of the treatment profiles
 test.data = simulate.trial(test.trts,
-                           mu.b = 0, sd.b = 1, sd.o = 1, 
+                           mu.b = 160, sd.b = 1, sd.o = 1, 
                            order = c("A", "B", "B", "A"), 
                            s.freq = 1, p.length = 20, n.blocks = 2,
                            baseline.type = "markov") %>% 
@@ -166,11 +166,17 @@ for (pl in p.length.vec) {
   }
 }
 
+write.csv(nsamp.v.power.results, "nsamp.v.power.results.csv")
+
+nsamp.v.power.results = nsamp.v.power.results %>% 
+  mutate(
+    `Effect Size` = factor(effect.size)
+  )
+
 nsamp.v.power.results %>% 
-  ggplot(aes(x = n.samples, y = mean.power, group = factor(effect.size), color = factor(effect.size))) +
+  ggplot(aes(x = n.samples, y = mean.power, group = `Effect Size`, color = `Effect Size`)) +
+  geom_point() +
   geom_line() +
-  geom_hline(yintercept = 0.8, alpha = 0.5, color = "gray") +
-  geom_hline(yintercept = 0.9, alpha = 0.5, color = "black") +
   labs(
     title = "Mean power based on sample size and effect size",
     x = "Sample size",
@@ -676,11 +682,11 @@ power.v.minsamp.results %>%
 
 ```{r}
 sdb.seq = seq(0.1, 2, length.out = 10)
-eff.seq = seq(0.1, 1, by = 0.1)
+eff.seq = seq(0.2, 1, by = 0.2)
 samp.candidates = 1:200
 N = 100
 dev10prct.v.minsamp.mu.b = 0
-dev10prct.v.minsamp.order = c("A", "B")
+dev10prct.v.minsamp.order = c("A", "B", "B", "A")
 dev10prct.v.minsamp.s.freq = 1  
 dev10prct.v.minsamp.n.blocks = 2
 dev10prct.v.minsamp.results = NULL
@@ -693,7 +699,7 @@ for (s in sdb.seq) {
     trt.A = list(
       name = "A",
       effect = ae * s,
-      sd = 1,
+      sd = 0.0001,
       run = 2,
       carry = 2
       )
@@ -756,13 +762,16 @@ for (s in sdb.seq) {
   }
 }
 
+write.csv(dev10prct.v.minsamp.results, "dev10prct.v.minsamp.results.csv")
+
 dev10prct.v.minsamp.results = dev10prct.v.minsamp.results %>% 
   mutate(
-    eff.size = factor(eff.size)
+    `Effect Size` = factor(eff.size)
   ) 
 
 dev10prct.v.minsamp.results %>% 
-  ggplot(aes(x = baseline.noise, y = min.samp, color = eff.size, group = eff.size)) +
+  ggplot(aes(x = baseline.noise, y = min.samp, color = `Effect Size`, group = `Effect Size`)) +
+  geom_point() + 
   geom_line() +
   labs(
     title = "Minimum number of samples needed to estimate\n treatment effect within 10% significantly on average",

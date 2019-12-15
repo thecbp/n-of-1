@@ -2,3 +2,305 @@
 title: "Treatment Selection Simulations"
 output: html_document
 ---
+
+```{r, message = F, warning = F }
+library(tidyverse)
+library(lme4)
+library(kableExtra)
+source("sim.R")
+```
+
+# Minimum Sample Size vs PCS
+
+How many samples do we need before we achieve a minimum 90% PCS
+
+### Variables
+
+- Period Length: 1 - 50
+- Effect of Treatment B
+- Standard Deviation of Treaments
+
+### Design Parameters
+
+- Sampling Frequency: 1
+- Treatment Order: A, B, B, A
+- Number of Blocks: 2
+
+### Treatment Parameters
+
+- Effect Size: 5
+- Effect of Treatment A: -5
+- Run-in of A: $\tau_a = 2$
+- Carryover of A: $\gamma_a = 2$
+- Run-in of B: $\tau_b = 2$
+- Carryover of B: $\gamma_b = 2$
+
+### Outcome Parameters
+
+- $\mu_b = 100$
+- $\sigma_b^2 = 1$
+
+```{r}
+N = 100
+samp.candidates = 1:200
+b.effs = c(0, -1, -2, -3, -4)
+sd.vec = seq(2, 10, by = 2)
+
+pcs.v.minsamp.mu.b = 100
+pcs.v.minsamp.sd.b = 1
+pcs.v.minsamp.sd.o = 0.01
+pcs.v.minsamp.order = c("A", "B", "C")
+pcs.v.minsamp.s.freq = 1  
+pcs.v.minsamp.n.blocks = 2
+pcs.v.minsamp.results = NULL
+
+for (beff in b.effs) {
+  for (s in sd.vec) {
+    
+    prog.txt = paste0("Simulations for B effect ", beff, " with treatment sd ", s)
+    print(prog.txt)
+    
+     trt.A = list(
+      name = "A",
+      effect = -5,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+     
+     trt.B = list(
+      name = "B",
+      effect = beff,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+     
+     trt.C = list(
+      name = "C",
+      effect = 0,
+      sd = 0,
+      run = 1,
+      carry = 1
+      )
+     
+     pcs.v.minsamp.trts = list(
+      testing = c("A", "B", "C"),
+      A = trt.A,
+      B = trt.B,
+      C = trt.C
+      )
+     
+     for (cand.p in samp.candidates) {
+       
+      pcs.vec = integer(N)
+      
+      for (i in 1:N) {
+        
+        sim.data = simulate.trial(pcs.v.minsamp.trts, 
+                                  mu.b = pcs.v.minsamp.mu.b, 
+                                  sd.b = pcs.v.minsamp.sd.b,
+                                  sd.o = pcs.v.minsamp.sd.o,
+                                  order = pcs.v.minsamp.order, 
+                                  s.freq = pcs.v.minsamp.s.freq, 
+                                  p.length = cand.p, 
+                                  n.blocks = pcs.v.minsamp.n.blocks,
+                                  baseline.type = "markov")
+        
+        sim.data = sim.data %>% 
+          mutate(
+            treatment = factor(treatment, levels = c("C", "A", "B"))
+          )
+        
+        # Run the model on the data
+        sim.model = lm(obs ~ factor(treatment) + factor(block), data = sim.data)
+        
+        coeff.tbl = summary(sim.model)$coefficients
+        
+        pcs.vec[i] = ifelse(abs(coeff.tbl[2,1]) > abs(coeff.tbl[3,1]), 1, 0)
+      }
+      
+      if (mean(pcs.vec) > .9) { 
+        print(paste0("Stopped at N = ", cand.p))
+        break 
+        }
+      
+     }
+     # Record the results of these parameters
+     res = tibble(
+       eff.diff = -5 - beff,
+       trt.noise = s,
+       min.samp = cand.p
+       )
+     
+     pcs.v.minsamp.results = bind_rows(pcs.v.minsamp.results, res)
+    }
+  }
+
+
+pcs.v.minsamp.results = pcs.v.minsamp.results %>% 
+  mutate(
+    `Effect Difference` = factor(eff.diff)
+  ) 
+
+pcs.plot = pcs.v.minsamp.results %>% 
+  ggplot(aes(x = trt.noise, y = min.samp, color = `Effect Difference`, group = `Effect Difference`)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Minimum period length needed to achieve 90% PCS (maximal)",
+    x = "Treatment noise",
+    y = "Minimum period length to reach 90%"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+  )
+
+pcs.plot
+```
+
+```{r}
+write.csv(pcs.v.minsamp.results, "../img/pcs-v-minsamp-results.csv")
+```
+
+### Achieving Treatment Window
+
+```{r}
+N = 100
+samp.candidates = 1:200
+window.sizes = c(5, 4, 3, 2, 1)
+sd.vec = seq(2, 10, by = 2)
+
+pcs.window.v.minsamp.mu.b = 100
+pcs.window.v.minsamp.sd.b = 1
+pcs.window.v.minsamp.sd.o = 0.01
+pcs.window.v.minsamp.order = c("A", "B", "C", "D")
+pcs.window.v.minsamp.s.freq = 1  
+pcs.window.v.minsamp.n.blocks = 2
+pcs.window.v.minsamp.results = NULL
+
+for (window in window.sizes) {
+  for (s in sd.vec) {
+    
+    prog.txt = paste0("Simulations for Window size ", window, " with treatment sd ", s)
+    print(prog.txt)
+    
+     trt.A = list(
+      name = "A",
+      effect = -5,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+     
+     trt.B = list(
+      name = "B",
+      effect = -5 + window,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+     
+     trt.C = list(
+      name = "C",
+      effect = -5 - window,
+      sd = s,
+      run = 2,
+      carry = 2
+      )
+     
+     trt.D = list(
+      name = "D",
+      effect = 0,
+      sd = 0,
+      run = 0,
+      carry = 0
+      )
+     
+     pcs.window.v.minsamp.trts = list(
+      testing = c("A", "B", "C", "D"),
+      A = trt.A,
+      B = trt.B,
+      C = trt.C,
+      D = trt.D
+      )
+     
+     for (cand.p in samp.candidates) {
+       
+      pcs.vec = integer(N)
+      
+      for (i in 1:N) {
+        
+        sim.data = simulate.trial(pcs.window.v.minsamp.trts, 
+                                  mu.b = pcs.window.v.minsamp.mu.b, 
+                                  sd.b = pcs.window.v.minsamp.sd.b,
+                                  sd.o = pcs.window.v.minsamp.sd.o,
+                                  order = pcs.window.v.minsamp.order, 
+                                  s.freq = pcs.window.v.minsamp.s.freq, 
+                                  p.length = cand.p, 
+                                  n.blocks = pcs.window.v.minsamp.n.blocks,
+                                  baseline.type = "markov")
+        
+        sim.data = sim.data %>% 
+          mutate(
+            treatment = factor(treatment, levels = c("D", "A", "B", "C"))
+          )
+        
+        # Run the model on the data
+        sim.model = lm(obs ~ factor(treatment) + factor(block), data = sim.data)
+        
+        coeff.tbl = summary(sim.model)$coefficients
+        
+        # Gather coefficients into a vector for comparison
+        coeffs = coeff.tbl[2:4,1]
+        deviations =  abs(coeffs + 5) # We know the optimal treatment is A
+        
+        # Check the index of the treatment that most closely achieves the true effect
+        best.idx = which(deviations == min(deviations))
+        
+        pcs.vec[i] = ifelse(best.idx == 1, 1, 0)
+      }
+      
+      if (mean(pcs.vec) > .9) { 
+        print(paste0("Stopped at N = ", cand.p))
+        break 
+        }
+      
+     }
+     # Record the results of these parameters
+     res = tibble(
+       window.size = window,
+       trt.noise = s,
+       min.samp = cand.p
+       )
+     
+     pcs.window.v.minsamp.results = bind_rows(pcs.window.v.minsamp.results, res)
+    }
+  }
+
+
+pcs.window.v.minsamp.results = pcs.window.v.minsamp.results %>% 
+  mutate(
+    `Window Size` = factor(window.size)
+  ) 
+
+pcs.plot2 = pcs.window.v.minsamp.results %>% 
+  ggplot(aes(x = trt.noise, y = min.samp, color = `Window Size`, group = `Window Size`)) +
+  geom_point() +
+  geom_line() +
+  labs(
+    title = "Minimum period length needed to achieve 90% PCS (window)",
+    x = "Treatment noise",
+    y = "Minimum period length needed to reach 90%"
+  ) + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "bottom",
+    panel.background = element_rect(fill = "white")
+  )
+
+pcs.plot2
+write.csv(pcs.window.v.minsamp.results, "../img/pcs2-v-minsamp-results.csv")
+```
