@@ -7,7 +7,7 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
+library(tidyverse) 
 source("./sim.R")
 ```
 
@@ -17,18 +17,18 @@ source("./sim.R")
 # Treatment A has a true effect estimate of 10 unites from treatment B
 trt.A = list(
   name = "A",
-  effect = -2,
+  effect = -3,
   sd = 0.01,
-  run = 1,
-  carry = 1
+  run = 2,
+  carry = 2
 )
 
 trt.B = list( 
   name = "B",
   effect = 0,
   sd = 0.01,
-  run = 0,
-  carry = 0
+  run = 1,
+  carry = 1
 )
 
 sim.trts = list(
@@ -36,6 +36,26 @@ sim.trts = list(
   A = trt.A,
   B = trt.B
 )
+
+test = simulate.trial(sim.trts,mu.b = 0, sd.b = 1, sd.o = 1,
+                      order = c("B", "A", "A", "B"),
+                      s.freq = 1, p.length = 5, n.blocks = 2,
+                      baseline.type = "markov")
+
+test %>% 
+  gather(key = "effect", value = "value", c(A.eff, B.eff, baseline:obs)) %>% 
+  mutate(trt = ifelse(effect == "A.eff" | effect == "B.eff", 
+                      "Treatment Effect", "Observed Outcome")) %>% 
+  ggplot(aes(x = day, y = value, color = effect)) +
+  geom_line() +
+  facet_grid(.~trt) +
+  labs(
+    title = "Visualization of simulated baseline, treatment effects, & observation",
+    x = "Day of treatment", 
+    y = "Outcome value"
+  ) + 
+  theme(legend.position = "bottom") + 
+  theme_bw()
 
 ```
 
@@ -54,6 +74,7 @@ sim.trts = list(
 - Number of blocks: 2
 
 ```{r}
+set.seed(1)
 # Create list for four different treatment orders
 trt_order = list(c("A", "B", "A", "B"),
                  c("A", "B", "B", "A"),
@@ -72,7 +93,7 @@ for (order in 1:4) {
     sim.data = simulate.trial(sim.trts,
                               mu.b = 0, sd.b = 1, sd.o = 1,
                               order = trt_order[[order]],
-                              s.freq = 1, p.length = 20, n.blocks = 2,
+                              s.freq = 1, p.length = 5, n.blocks = 2,
                               baseline.type = "markov") %>% 
       mutate(A = ifelse(treatment == "A", 1, 0))
     
@@ -93,12 +114,13 @@ for (order in 1:4) {
 results.summary = order.results %>% 
   filter(signif == 1) %>% 
   group_by(order) %>% 
-  summarize(median = median(eff_est))
+  summarize(median = median(eff_est),
+            var = var(eff_est))
 
 order.results %>% 
-  mutate(signif = factor(signif)) %>% 
+  mutate(signif = factor(signif, levels = c("1", "0"))) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -3, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = order, y = median), size = 2) + 
   labs(title = "Treatment orders vs effect estimate",
@@ -112,6 +134,8 @@ order.results %>%
 ## Simulate different sampling orders
 
 ```{r}
+
+set.seed(1)
 # Create list for six different sampling intervals
 samp_order = c(1, 2, 5, 10, 15, 30)
 
@@ -128,7 +152,7 @@ for (order in 1:6) {
                               mu.b = 0, sd.b = 1, sd.o = 1,
                               order = c("A", "B", "A", "B"),
                               s.freq = samp_order[order], 
-                              p.length = 20, n.blocks = 2,
+                              p.length = 5, n.blocks = 2,
                               baseline.type = "markov") %>% 
       mutate(A = ifelse(treatment == "A", 1, 0))
     
@@ -148,13 +172,14 @@ for (order in 1:6) {
 results.summary = order.results %>% 
   filter(signif == 1) %>% 
   group_by(order) %>% 
-  summarize(median = median(eff_est))
+  summarize(median = median(eff_est),
+            var = var(eff_est))
 
 order.results %>% 
   mutate(signif = factor(signif),
          order = factor(order)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -3, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
   labs(title = "Sampling intervals vs Effect Estimate",
@@ -168,6 +193,7 @@ order.results %>%
 ## Simulate period length
 
 ```{r}
+set.seed(1)
 # Create list for six different sampling intervals
 period_order = c(2, 5, 15, 30, 40, 60, 120)
 
@@ -203,13 +229,14 @@ for (order in period_order) {
 results.summary = order.results %>% 
   filter(signif == 1) %>% 
   group_by(order) %>% 
-  summarize(median = median(eff_est))
+  summarize(median = median(eff_est),
+            var = var(eff_est))
 
 order.results %>% 
   mutate(signif = factor(signif, levels = c("1", "0")),
          order = factor(order)) %>% 
   ggplot(aes(x = order, y = eff_est)) + 
-  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -3, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = factor(order), y = median), size = 2) + 
   labs(title = "Period length vs Effect Estimate",
@@ -223,6 +250,7 @@ order.results %>%
 ## Simulate number of blocks
 
 ```{r, warning = FALSE, echo = FALSE}
+set.seed(1)
 # Create list for six different sampling intervals
 n_block = c(1:6)
 
@@ -238,7 +266,7 @@ for (n in n_block) {
     sim.data = simulate.trial(sim.trts,
                               mu.b = 0, sd.b = 1, sd.o = 1,
                               order = c("A", "B", "A", "B"), s.freq = 1, 
-                              p.length = 20, n.blocks = n,
+                              p.length = 5, n.blocks = n,
                               baseline.type = "markov") %>% 
       mutate(A = ifelse(treatment == "A", 1, 0))
     
@@ -270,7 +298,7 @@ results.summary = order.results %>%
 order.results %>% 
   mutate(signif = factor(signif)) %>% 
   ggplot(aes(x = factor(n_block), y = eff_est)) + 
-  geom_hline(yintercept = -2, linetype = "dashed", size = 1) + 
+  geom_hline(yintercept = -3, linetype = "dashed", size = 1) + 
   geom_jitter(aes(color = signif), width = 0.2, height = 0.5) + 
   geom_point(data = results.summary, aes(x = factor(n_block), y = median), size = 2) + 
   labs(title = "Number of blocks vs Effect Treatment",
