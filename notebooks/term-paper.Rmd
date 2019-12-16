@@ -141,8 +141,6 @@ $$
 Y(t) = B(t) + \sum^T_{i=1} X^i(t)
 $$
 
-Figure 1 visualizes an example output of our simulation software.
-
 ```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig1cap}
 include_graphics('./img/simulation-output.png')
 ```
@@ -173,7 +171,7 @@ Our case study highlights just one use case for N-of-1 trials. For our paper, we
 
 ## Case Study: Active Treatment vs Placebo
 
-To demonstrate the nuances of design consideration, we present a case study using our simulations. We assume two treatments with a continuous outcome measurement: $A$ has a treatment effect of -3 with 2 run-in and 2 carryover days. $B$ is the placebo with 0 treatment effect and has 1 run-in and 1 carryover day (Figure 2). Our choice of tuning design parameters resulted in the following simulation scenarios:
+To demonstrate the nuances of design consideration, we present a case study using our simulations. We assume two treatments with a continuous outcome measurement: $A$ has a treatment effect of -3 with 2 run-in and 2 carryover days. $B$ is the placebo with no treatment effect and has 1 run-in and 1 carryover day (Figure 2). Our choice of tuning design parameters resulted in the following simulation scenarios:
 
 1. Treatment selection: $ABAB$, $ABBA$, $BABA$, $BAAB$ holding sampling frequency to 1, period length to 5 days, and the number of blocks to 2
 2. Sampling frequency: 1 to 30 times in a period holding treatment order to $ABAB$, period length to 5 days, and the number of blocks to 2
