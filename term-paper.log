@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019/W32TeX) (preloaded format=pdflatex 2019.12.6)  15 DEC 2019 22:34
+This is pdfTeX, Version 3.14159265-2.6-1.40.20 (TeX Live 2019/W32TeX) (preloaded format=pdflatex 2019.12.6)  15 DEC 2019 22:50
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -680,8 +680,27 @@ Package: varwidth 2009/03/30 ver 0.92;  Variable-width minipages
 \tabu@vleads=\box42
 \tabu@cellskip=\skip59
 )
+(c:/Users/adina/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/threeparttable/thr
+eeparttable.sty
+Package: threeparttable 2003/06/13  v 3.0
+\@tempboxb=\box43
+)
+(c:/Users/adina/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/threeparttablex/th
+reeparttablex.sty
+Package: threeparttablex 2013/07/23 v0.3 by daleif
 
-! LaTeX Error: File `threeparttable.sty' not found.
+(c:/Users/adina/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/environ/environ.st
+y
+Package: environ 2014/05/04 v0.3 A new way to define environments
+
+(c:/Users/adina/AppData/Roaming/TinyTeX/texmf-dist/tex/latex/trimspaces/trimspa
+ces.sty
+Package: trimspaces 2009/09/17 v1.1 Trim spaces around a token list
+))
+\TPTL@width=\skip60
+)
+
+! LaTeX Error: File `ulem.sty' not found.
 
 Type X to quit or <RETURN> to proceed,
 or enter new name. (Default extension: sty)
@@ -690,13 +709,13 @@ Enter file name:
 ! Emergency stop.
 <read *> 
          
-l.97 \usepackage
-                {threeparttablex}^^M 
+l.99 \usepackage
+                {makecell}^^M 
 Here is how much of TeX's memory you used:
- 11162 strings out of 494108
- 157473 string characters out of 6172241
- 228138 words of memory out of 5000000
- 15142 multiletter control sequences out of 15000+600000
+ 11291 strings out of 494108
+ 159978 string characters out of 6172241
+ 229135 words of memory out of 5000000
+ 15255 multiletter control sequences out of 15000+600000
  4709 words of font info for 16 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  39i,0n,34p,235b,270s stack positions out of 5000i,500n,10000p,200000b,80000s
