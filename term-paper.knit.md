@@ -10,17 +10,7 @@ fontsize: 11pt
 geometry: margin = 1in
 ---
     
-```{r, echo = F, message = F, warning = F }
-library(tidyverse)
-library(knitr)
-library(kableExtra)
 
-fig1cap = "An example simulation output. Baseline value was initialized at 100 with $\\sigma_b^2 = 5$. Treatment A (red) has a true effect of -30 with a carryover constant of 2, run-in constant of 2 and $\\sigma^2_A = 1$. Treatment B (blue) is a placebo with no treatment effect 0, no carryover or run-in and $\\sigma^2_B = 1$. Other treatments (C) were not specified and do not contribute to the observed effect."
-
-fig2cap = "Simulation results on effect estimate after tuning for design parameters, including (A) treatment orders, (B) sampling frequency, (C) period length, (D) number of blocks. Each tuning parameter was run with 50 simulations. Drug A has a true effect of -3 while Drug B is a placebo with 0 effect. Black points are median effect sizes among statistically significant results."
-
-fig3cap = "Simulations showing how varying treatment parameters affects power, treatment effect estimation and PCS."
-```
 
 # Introduction
 
@@ -54,68 +44,39 @@ Outcome parameters relate to the specific clinical endpoint that a subject is in
 
 ## Data Generation Process
 
-```{r params-table, echo = F }
-params = tibble(
-  `Parameter` = c(
-    "Sampling Frequency",
-    "Period Length",
-    "Number of Treatments",
-    "Treatment Order",
-    "Number of Blocks",
-    "Treatment Effect",
-    "Carryover",
-    "Run-in",
-    "Treatment Noise",
-    "Baseline Start",
-    "Baseline Noise"
-  ),
-  `Notation` = c(
-    "$F$",
-    "$P$",
-    "$T$",
-    "$O$",
-    "$B$",
-    "$E_k$",
-    "$\\tau_k$",
-    "$\\gamma_k$",
-    "$\\sigma^2_k$",
-    "$\\mu_b$",
-    "$\\sigma^2_b$"
-  ),
-  `Type` = c(
-    rep("Design", 5),
-    rep("Treatment", 4),
-    rep("Outcome", 2)
-  ),
-  `Description` = c(
-    "Number of times patient is sampled in one period",
-    "Length of the treatment period",
-    "How many treatments used in trial",
-    "Order of treatments given to patient in single block",
-    "How many treatment blocks used in trial",
-    "Effect of treatment $T$ on the baseline",
-    "Constant affecting how long it takes for effect of treatment $k$ to go away",
-    "Constant affecting how long it takes for full effect of treatment $k$ to occur",
-    "How much will the treatment $k$ effect vary overall",
-    "Starting value for the baseline Markov chain",
-    "How much can the Markov chain move at each time point"
-  )
-)
+\begin{table}[t]
 
-kable(params, "latex", 
-      booktabs = T, 
-      escape = F, 
-      linesep = " ",
-      caption = "Tunable parameters in our N-of-1 trial simulation software"
-      ) %>% 
-  kable_styling(
-    latex_options = "striped",
-    full_width = T,
-    font_size = 9
-    ) %>% 
-  column_spec(1, width = "10em") %>% 
-  column_spec(4, width = "25em")
-```
+\caption{\label{tab:params-table}Tunable parameters in our N-of-1 trial simulation software}
+\centering
+\fontsize{9}{11}\selectfont
+\begin{tabu} to \linewidth {>{\raggedright\arraybackslash}p{10em}>{\raggedright}X>{\raggedright}X>{\raggedright\arraybackslash}p{25em}}
+\toprule
+Parameter & Notation & Type & Description\\
+\midrule
+\rowcolor{gray!6}  Sampling Frequency & $F$ & Design & Number of times patient is sampled in one period\\
+ 
+Period Length & $P$ & Design & Length of the treatment period\\
+ 
+\rowcolor{gray!6}  Number of Treatments & $T$ & Design & How many treatments used in trial\\
+ 
+Treatment Order & $O$ & Design & Order of treatments given to patient in single block\\
+ 
+\rowcolor{gray!6}  Number of Blocks & $B$ & Design & How many treatment blocks used in trial\\
+ 
+Treatment Effect & $E_k$ & Treatment & Effect of treatment $T$ on the baseline\\
+ 
+\rowcolor{gray!6}  Carryover & $\tau_k$ & Treatment & Constant affecting how long it takes for effect of treatment $k$ to go away\\
+ 
+Run-in & $\gamma_k$ & Treatment & Constant affecting how long it takes for full effect of treatment $k$ to occur\\
+ 
+\rowcolor{gray!6}  Treatment Noise & $\sigma^2_k$ & Treatment & How much will the treatment $k$ effect vary overall\\
+ 
+Baseline Start & $\mu_b$ & Outcome & Starting value for the baseline Markov chain\\
+ 
+\rowcolor{gray!6}  Baseline Noise & $\sigma^2_b$ & Outcome & How much can the Markov chain move at each time point\\
+\bottomrule
+\end{tabu}
+\end{table}
 
 Table 1 summarizes all of the parameters that a user can tune in our simulation software. We denote $B(t)$ as the baseline outcome value of a subject at time $t$, which has values going from $1, \ldots, F \times T \times P \times B$. A subject's baseline outcome value is modeled as a Markov process. Given a starting value $\mu_b$, the next value in the chain is calculated using $\sigma^2_b$ as:
 
@@ -143,9 +104,14 @@ $$
 
 Figure 1 visualizes an example output of our simulation software.
 
-```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig1cap}
-include_graphics('./img/simulation-output.png')
-```
+\begin{figure}
+
+{\centering \includegraphics[width=0.8\linewidth]{./img/simulation-output} 
+
+}
+
+\caption{An example simulation output. Baseline value was initialized at 100 with $\sigma_b^2 = 5$. Treatment A (red) has a true effect of -30 with a carryover constant of 2, run-in constant of 2 and $\sigma^2_A = 1$. Treatment B (blue) is a placebo with no treatment effect 0, no carryover or run-in and $\sigma^2_B = 1$. Other treatments (C) were not specified and do not contribute to the observed effect.}\label{fig:unnamed-chunk-2}
+\end{figure}
 
 ## Simulation Scope
 
@@ -190,15 +156,25 @@ Like sampling frequency, increasing period length increases accuracy of treatmen
 
 We varied block length and in Figure 2 we observe no significant difference in effect estimate with increasing blocks. However, variance does decrease with increased blocks. We surmise that the reason we do not observe any differences is that our simulation does not model time-trends. We do observe variance decreased because sample size increases with blocks thereby increasing certainty in the estimates. 
 
-```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig2cap}
-include_graphics('./img/combined_case_study.png')
-```
+\begin{figure}
+
+{\centering \includegraphics[width=0.8\linewidth]{./img/combined_case_study} 
+
+}
+
+\caption{Simulation results on effect estimate after tuning for design parameters, including (A) treatment orders, (B) sampling frequency, (C) period length, (D) number of blocks. Each tuning parameter was run with 50 simulations. Drug A has a true effect of -3 while Drug B is a placebo with 0 effect. Black points are median effect sizes among statistically significant results.}\label{fig:unnamed-chunk-3}
+\end{figure}
 
 ## Sample Size & Power
 
-```{r echo = FALSE, out.width='90%', fig.align = "center", fig.cap = fig3cap}
-include_graphics('./img/term-paper-fig-3.png')
-```
+\begin{figure}
+
+{\centering \includegraphics[width=0.9\linewidth]{./img/term-paper-fig-3} 
+
+}
+
+\caption{Simulations showing how varying treatment parameters affects power, treatment effect estimation and PCS.}\label{fig:unnamed-chunk-4}
+\end{figure}
 
 Figure 3a is the result of a series of simulations designed to investigate the effect of changes to treatment effect sizes on average power and effect estimation. We kept the number of blocks constant at 2 and the treatment order at $ABBA$ ($A$ being the active treatment, $B$ being placebo). The initial baseline value was 0, and baseline noise was set to 1. For these simulations, the effect of the active treatment was a linear function of the baseline noise. The active treatment was given carryover and run-in constants of 2 and a negligible noise. Keeping sampling frequency at 1/period and looking at different period lengths from 1 to 20 days, we looked at the average power for a set of 100 simulations. We have a supplemental table at the end laying out the simulation parameters used for each figure. 
 
@@ -263,66 +239,41 @@ This project gave us an increased appreciation for the role of simulation in gui
 
 \pagebreak
 
-```{r supplement-tbl, echo = F }
-supp.params = tibble(
-  `Parameter` = c(
-    "Sampling Frequency",
-    "Period Length",
-    "Number of Treatments",
-    "Treatment Order",
-    "Number of Blocks",
-    "Treatment Effect",
-    "Carryover",
-    "Run-in",
-    "Treatment Noise",
-    "Baseline Start",
-    "Baseline Noise",
-    "Number simulations"
-  ),
-  `Notation` = c(
-    "$F$",
-    "$P$",
-    "$T$",
-    "$O$",
-    "$B$",
-    "$E_k$",
-    "$\\tau_k$",
-    "$\\gamma_k$",
-    "$\\sigma^2_k$",
-    "$\\mu_b$",
-    "$\\sigma^2_b$",
-    "$N$"
-  ),
-  `2a` = c(
-    "1", "Varies", "2", "A, B, B, A", "2",
-    "Varies", "2", "2", "0.01", "0", "1", "100"
-  ),
-  `2b` = c(
-    "1", "Varies", "2", "A, B, B, A", "2",
-    "Varies", "2", "2", "0.01", "0", "Varies", "100"
-  ),
-  `2c` = c(
-    "1", "Varies", "3", "A, B, C", "2",
-    "-5, Varies", "2", "2", "Varies", "100", "1", "100"
-  ),
-  `2d` = c(
-    "1", "Varies", "4", "A, B, C, D", "2",
-    "-5, Others Varies", "2", "2", "Varies", "100", "1", "100"
-  )
-)
+\begin{table}[t]
 
-kable(supp.params, "latex", 
-      booktabs = T, 
-      escape = F, 
-      linesep = " ",
-      caption = "(Supplement)Parameters used in different simulations for Figure 3"
-      ) %>% 
-  kable_styling(
-    latex_options = "striped",
-    full_width = T,
-    font_size = 9
-    )
-```
+\caption{\label{tab:supplement-tbl}(Supplement)Parameters used in different simulations for Figure 3}
+\centering
+\fontsize{9}{11}\selectfont
+\begin{tabu} to \linewidth {>{\raggedright}X>{\raggedright}X>{\raggedright}X>{\raggedright}X>{\raggedright}X>{\raggedright}X}
+\toprule
+Parameter & Notation & 2a & 2b & 2c & 2d\\
+\midrule
+\rowcolor{gray!6}  Sampling Frequency & $F$ & 1 & 1 & 1 & 1\\
+ 
+Period Length & $P$ & Varies & Varies & Varies & Varies\\
+ 
+\rowcolor{gray!6}  Number of Treatments & $T$ & 2 & 2 & 3 & 4\\
+ 
+Treatment Order & $O$ & A, B, B, A & A, B, B, A & A, B, C & A, B, C, D\\
+ 
+\rowcolor{gray!6}  Number of Blocks & $B$ & 2 & 2 & 2 & 2\\
+ 
+Treatment Effect & $E_k$ & Varies & Varies & -5, Varies & -5, Others Varies\\
+ 
+\rowcolor{gray!6}  Carryover & $\tau_k$ & 2 & 2 & 2 & 2\\
+ 
+Run-in & $\gamma_k$ & 2 & 2 & 2 & 2\\
+ 
+\rowcolor{gray!6}  Treatment Noise & $\sigma^2_k$ & 0.01 & 0.01 & Varies & Varies\\
+ 
+Baseline Start & $\mu_b$ & 0 & 0 & 100 & 100\\
+ 
+\rowcolor{gray!6}  Baseline Noise & $\sigma^2_b$ & 1 & Varies & 1 & 1\\
+ 
+Number simulations & $N$ & 100 & 100 & 100 & 100\\
+\bottomrule
+\end{tabu}
+\end{table}
 
 
 
