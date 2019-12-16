@@ -144,7 +144,7 @@ $$
 Figure 1 visualizes an example output of our simulation software.
 
 ```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig1cap}
-include_graphics('../img/simulation-output.png')
+include_graphics('./img/simulation-output.png')
 ```
 
 ## Simulation Scope
@@ -191,13 +191,13 @@ Like sampling frequency, increasing period length increases accuracy of treatmen
 We varied block length and in Figure 2 we observe no significant difference in effect estimate with increasing blocks. However, variance does decrease with increased blocks. We surmise that the reason we do not observe any differences is that our simulation does not model time-trends. We do observe variance decreased because sample size increases with blocks thereby increasing certainty in the estimates. 
 
 ```{r echo = FALSE, out.width='80%', fig.align = "center", fig.cap = fig2cap}
-include_graphics('../img/term-paper-fig-3.png')
+include_graphics('./img/term-paper-fig-3.png')
 ```
 
 ## Sample Size & Power
 
 ```{r echo = FALSE, out.width='90%', fig.align = "center", fig.cap = fig3cap}
-include_graphics('../img/term-paper-fig-3.png')
+include_graphics('./img/term-paper-fig-3.png')
 ```
 
 Figure 3a is the result of a series of simulations designed to investigate the effect of changes to treatment effect sizes on average power and effect estimation. We kept the number of blocks constant at 2 and the treatment order at $ABBA$ ($A$ being the active treatment, $B$ being placebo). The initial baseline value was 0, and baseline noise was set to 1. For these simulations, the effect of the active treatment was a linear function of the baseline noise. The active treatment was given carryover and run-in constants of 2 and a negligible noise. Keeping sampling frequency at 1/period and looking at different period lengths from 1 to 20 days, we looked at the average power for a set of 100 simulations. We have a supplemental table at the end laying out the simulation parameters used for each figure. 
